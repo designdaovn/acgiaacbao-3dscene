@@ -305,33 +305,28 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  // Áp dụng rotation cho camera
+  // Áp dụng rotation
   camera.rotation.y = yaw;
   camera.rotation.x = pitch;
 
-  // ── Movement ─────────────────────────────────────────────────
-  // Forward và Right vectors đúng với Three.js rotation.y = yaw
-  // Three.js: rotation.y=θ → world look direction = (-sinθ, 0, -cosθ)
-  // forward = (-sin(yaw), 0, -cos(yaw))
-  // right   = (-fz, 0, fx) = (cos(yaw), 0, -sin(yaw))
-  const FX = -Math.sin(yaw);   // forward X
-  const FZ = -Math.cos(yaw);   // forward Z
-  const RX = -FZ;              // right X = cos(yaw)
-  const RZ =  FX;              // right Z = -sin(yaw)
+  // ── Movement ──────────────────────────────────────────────────
+  // Dùng getWorldDirection SAU KHI đã set rotation → luôn đúng
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  dir.y = 0;
+  dir.normalize();
 
-  const fwd = (K['KeyW']||K['ArrowUp'])    ? 1 : 0;
-  const bck = (K['KeyS']||K['ArrowDown'])  ? 1 : 0;
-  const rgt = (K['KeyD']||K['ArrowRight']) ? 1 : 0;
-  const lft = (K['KeyA']||K['ArrowLeft'])  ? 1 : 0;
+  // right vector: cross(up, forward) — cho ra vector sang PHẢI
+  const right = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
 
-  const mf = fwd - bck;
-  const mr = rgt - lft;
+  const mf = ((K['KeyW']||K['ArrowUp']) ? 1:0) - ((K['KeyS']||K['ArrowDown']) ? 1:0);
+  const mr = ((K['KeyD']||K['ArrowRight']) ? 1:0) - ((K['KeyA']||K['ArrowLeft']) ? 1:0);
 
   if (mf !== 0 || mr !== 0) {
-    const sp = SPEEDS[sMode] * dt;
-    const dx = FX * mf + RX * mr;
-    const dz = FZ * mf + RZ * mr;
+    const dx  = dir.x * mf + right.x * mr;
+    const dz  = dir.z * mf + right.z * mr;
     const len = Math.sqrt(dx*dx + dz*dz);
+    const sp  = SPEEDS[sMode] * dt;
     camera.position.x += (dx/len) * sp;
     camera.position.z += (dz/len) * sp;
   }
