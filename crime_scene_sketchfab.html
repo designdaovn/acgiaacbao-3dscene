@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crime Scene — 3D Explorer</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { overflow:hidden; background:#0a0a0f; font-family:'Segoe UI',sans-serif; }
+
+  #loading {
+    position:fixed; inset:0; background:#0a0a0f;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    z-index:100; transition:opacity 1s;
+  }
+  #loading h1 {
+    color:#cc3333; font-size:2.2rem; letter-spacing:0.35em;
+    text-transform:uppercase; margin-bottom:6px;
+    text-shadow: 0 0 30px rgba(200,50,50,0.5);
+  }
+  #loading p { color:#555; font-size:0.82rem; letter-spacing:0.12em; margin-bottom:36px; }
+  #progress-bar { width:240px; height:2px; background:#1a1a2a; border-radius:2px; overflow:hidden; }
+  #progress-fill { height:100%; width:0%; background:linear-gradient(90deg,#cc3333,#ff6666); border-radius:2px; transition:width 0.4s; }
+  #loading-sub { color:#444; margin-top:12px; font-size:0.72rem; letter-spacing:0.08em; }
+
+  #viewer-container {
+    position:fixed; inset:0;
+    opacity:0; transition:opacity 1.2s;
+  }
+  #viewer-container iframe {
+    width:100%; height:100%; border:none;
+  }
+
+  /* HUD */
+  #hud {
+    position:fixed; inset:0; pointer-events:none; z-index:50;
+    opacity:0; transition:opacity 0.8s;
+  }
+
+  #title-badge {
+    position:absolute; top:18px; left:18px;
+    background:rgba(0,0,0,0.7); border:1px solid rgba(180,30,30,0.4);
+    border-radius:10px; padding:9px 15px; backdrop-filter:blur(10px);
+    pointer-events:none;
+  }
+  #title-badge span { color:#cc3333; font-size:13px; font-weight:700; letter-spacing:0.15em; text-transform:uppercase; display:block; }
+  #title-badge small { color:#555; font-size:10px; letter-spacing:0.08em; margin-top:2px; display:block; }
+
+  #hint {
+    position:absolute; top:18px; left:50%; transform:translateX(-50%);
+    background:rgba(0,0,0,0.65); color:rgba(255,200,200,0.8);
+    padding:7px 20px; border-radius:20px; font-size:12px;
+    border:1px solid rgba(180,50,50,0.25); backdrop-filter:blur(8px);
+    letter-spacing:0.03em; transition:opacity 1.5s; white-space:nowrap;
+  }
+
+  /* Scanline overlay for atmosphere */
+  #scanlines {
+    position:fixed; inset:0; pointer-events:none; z-index:40;
+    background: repeating-linear-gradient(
+      0deg, transparent, transparent 2px,
+      rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
+    );
+  }
+
+  /* Corner decorations */
+  .corner {
+    position:fixed; width:24px; height:24px;
+    border-color:#cc3333; border-style:solid; opacity:0.4;
+    pointer-events:none; z-index:45;
+  }
+  .corner.tl { top:12px; left:12px; border-width:2px 0 0 2px; }
+  .corner.tr { top:12px; right:12px; border-width:2px 2px 0 0; }
+  .corner.bl { bottom:12px; left:12px; border-width:0 0 2px 2px; }
+  .corner.br { bottom:12px; right:12px; border-width:0 2px 2px 0; }
+
+  /* Status dot */
+  #status-dot {
+    position:fixed; bottom:20px; left:20px; z-index:55;
+    display:flex; align-items:center; gap:7px;
+    background:rgba(0,0,0,0.6); border:1px solid rgba(180,30,30,0.25);
+    border-radius:20px; padding:5px 12px; backdrop-filter:blur(8px);
+    pointer-events:none; opacity:0; transition:opacity 0.8s;
+  }
+  #status-dot .dot {
+    width:7px; height:7px; border-radius:50%;
+    background:#cc3333; animation:pulse 2s infinite;
+  }
+  #status-dot span { color:#888; font-size:10px; letter-spacing:0.08em; }
+  @keyframes pulse {
+    0%,100% { opacity:1; box-shadow:0 0 4px #cc3333; }
+    50% { opacity:0.4; box-shadow:none; }
+  }
+
+  /* Fullscreen btn */
+  #fs-btn {
+    position:fixed; bottom:18px; right:18px; z-index:55;
+    background:rgba(0,0,0,0.6); border:1px solid rgba(180,50,50,0.3);
+    color:#cc6666; font-size:12px; padding:7px 13px;
+    border-radius:9px; cursor:pointer; backdrop-filter:blur(8px);
+    letter-spacing:0.05em; pointer-events:all;
+    opacity:0; transition:opacity 0.8s, background 0.15s;
+  }
+  #fs-btn:hover { background:rgba(160,30,30,0.3); }
+</style>
+</head>
+<body>
+
+<!-- Loading screen -->
+<div id="loading">
+  <h1>☠ Crime Scene</h1>
+  <p>3D Interactive Explorer</p>
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+  <div id="loading-sub">Đang tải hiện trường vụ án...</div>
+</div>
+
+<!-- Sketchfab iframe -->
+<div id="viewer-container">
+  <iframe id="sketchfab-iframe"
+    src="https://sketchfab.com/models/969873dcfd1a4a039d2152bb41ad68e3/embed?autostart=1&ui_theme=dark&ui_infos=0&ui_controls=1&ui_watermark=0&ui_watermark_link=0&dnt=1"
+    allow="autoplay; fullscreen; xr-spatial-tracking"
+    allowfullscreen
+    mozallowfullscreen="true"
+    webkitallowfullscreen="true">
+  </iframe>
+</div>
+
+<!-- Atmosphere overlays -->
+<div id="scanlines"></div>
+<div class="corner tl"></div>
+<div class="corner tr"></div>
+<div class="corner bl"></div>
+<div class="corner br"></div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="title-badge">
+    <span>☠ Crime Scene</span>
+    <small>3D Interactive Explorer</small>
+  </div>
+  <div id="hint">🖱 Kéo để xoay · Scroll để zoom · Click đúp để đi vào điểm bất kỳ</div>
+</div>
+
+<div id="status-dot">
+  <div class="dot"></div>
+  <span>LIVE · 3D SCENE</span>
+</div>
+
+<button id="fs-btn" onclick="toggleFS()">⛶ Fullscreen</button>
+
+<script>
+  const iframe = document.getElementById('sketchfab-iframe');
+  const loading = document.getElementById('loading');
+  const viewer  = document.getElementById('viewer-container');
+  const hud     = document.getElementById('hud');
+  const fill    = document.getElementById('progress-fill');
+  const sub     = document.getElementById('loading-sub');
+  const dot     = document.getElementById('status-dot');
+  const fsBtn   = document.getElementById('fs-btn');
+  const hint    = document.getElementById('hint');
+
+  // Simulate progress while Sketchfab loads
+  let pct = 0;
+  const msgs = [
+    [10,  'Kết nối tới Sketchfab...'],
+    [30,  'Đang tải geometry...'],
+    [55,  'Đang tải textures...'],
+    [75,  'Đang dựng scene 3D...'],
+    [90,  'Hoàn thiện ánh sáng...'],
+  ];
+  let mi = 0;
+  const ticker = setInterval(() => {
+    if (mi < msgs.length) {
+      pct = msgs[mi][0];
+      sub.textContent = msgs[mi][1];
+      fill.style.width = pct + '%';
+      mi++;
+    }
+  }, 900);
+
+  // When iframe loads, fade in
+  iframe.addEventListener('load', () => {
+    clearInterval(ticker);
+    fill.style.width = '100%';
+    sub.textContent = 'Hoàn tất! ✓';
+    setTimeout(() => {
+      loading.style.opacity = '0';
+      viewer.style.opacity  = '1';
+      hud.style.opacity     = '1';
+      dot.style.opacity     = '1';
+      fsBtn.style.opacity   = '1';
+      setTimeout(() => loading.style.display = 'none', 1000);
+    }, 600);
+    // Hide hint after 7s
+    setTimeout(() => hint.style.opacity = '0', 7000);
+  });
+
+  // Fullscreen
+  function toggleFS() {
+    const el = document.documentElement;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.() || el.webkitRequestFullscreen?.();
+      fsBtn.textContent = '✕ Exit';
+    } else {
+      document.exitFullscreen?.() || document.webkitExitFullscreen?.();
+      fsBtn.textContent = '⛶ Fullscreen';
+    }
+  }
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement) fsBtn.textContent = '⛶ Fullscreen';
+  });
+</script>
+</body>
+</html>
