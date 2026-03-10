@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crime Scene — First Person</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { overflow:hidden; background:#111; font-family:'Segoe UI',sans-serif; cursor:crosshair; }
+canvas { display:block; }
+#loading {
+  position:fixed; inset:0; background:#0d0d12;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  z-index:200; transition:opacity 1s;
+}
+#loading h1 { color:#cc3333; font-size:2rem; letter-spacing:0.3em; text-transform:uppercase; margin-bottom:6px; text-shadow:0 0 30px rgba(200,50,50,0.5); }
+#loading p  { color:#555; font-size:0.8rem; letter-spacing:0.1em; margin-bottom:30px; }
+#bar { width:260px; height:3px; background:#1a1a2a; border-radius:2px; overflow:hidden; }
+#bar-fill { height:100%; width:0%; background:linear-gradient(90deg,#cc3333,#ff6666); transition:width 0.2s; }
+#bar-txt { color:#555; margin-top:10px; font-size:0.72rem; }
+#xhair {
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:16px; height:16px; pointer-events:none; z-index:50;
+}
+#xhair::before,#xhair::after { content:''; position:absolute; background:rgba(255,80,80,0.95); border-radius:1px; }
+#xhair::before { width:2px; height:100%; left:50%; transform:translateX(-50%); }
+#xhair::after  { width:100%; height:2px; top:50%; transform:translateY(-50%); }
+#badge {
+  position:fixed; top:16px; left:16px; z-index:50; pointer-events:none;
+  background:rgba(0,0,0,0.75); border:1px solid rgba(180,30,30,0.4);
+  border-radius:10px; padding:8px 14px; backdrop-filter:blur(10px);
+}
+#badge b { color:#cc3333; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; display:block; }
+#badge small { color:#555; font-size:10px; }
+#hint {
+  position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:50;
+  background:rgba(0,0,0,0.75); color:rgba(255,200,200,0.9);
+  padding:7px 18px; border-radius:20px; font-size:11px;
+  border:1px solid rgba(180,50,50,0.3); backdrop-filter:blur(8px);
+  pointer-events:none; transition:opacity 1.5s; white-space:nowrap;
+}
+#dpad {
+  position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+  display:grid; grid-template-columns:repeat(3,52px); grid-template-rows:repeat(2,52px);
+  gap:5px; z-index:100;
+}
+.btn {
+  background:rgba(0,0,0,0.6); border:1px solid rgba(200,60,60,0.4);
+  border-radius:12px; color:rgba(255,160,160,0.9); font-size:18px;
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  user-select:none; -webkit-tap-highlight-color:transparent;
+  backdrop-filter:blur(6px); transition:background 0.1s,transform 0.08s;
+}
+.btn:active,.btn.on { background:rgba(200,50,50,0.5); transform:scale(0.91); }
+.btn.empty { visibility:hidden; pointer-events:none; }
+#btn-jump { border-color:rgba(80,140,255,0.5); color:rgba(160,200,255,0.95); }
+#ctrl {
+  position:fixed; bottom:24px; right:14px;
+  display:flex; flex-direction:column; gap:7px; z-index:100;
+}
+.cbtn {
+  background:rgba(0,0,0,0.7); border:1px solid rgba(200,60,60,0.35);
+  color:#cc6666; font-size:11px; padding:7px 11px;
+  border-radius:9px; cursor:pointer; backdrop-filter:blur(8px); text-align:center;
+}
+.cbtn:hover { background:rgba(160,30,30,0.35); }
+.corner { position:fixed; width:20px; height:20px; border-color:rgba(200,30,30,0.45); border-style:solid; pointer-events:none; z-index:45; }
+.corner.tl{top:10px;left:10px;border-width:2px 0 0 2px}
+.corner.tr{top:10px;right:10px;border-width:2px 2px 0 0}
+.corner.bl{bottom:10px;left:10px;border-width:0 0 2px 2px}
+.corner.br{bottom:10px;right:10px;border-width:0 2px 2px 0}
+</style>
+</head>
+<body>
+<div id="loading">
+  <h1>☠ Crime Scene</h1>
+  <p>First Person Explorer</p>
+  <div id="bar"><div id="bar-fill"></div></div>
+  <div id="bar-txt">Đang tải...</div>
+</div>
+<div id="xhair"></div>
+<div class="corner tl"></div><div class="corner tr"></div>
+<div class="corner bl"></div><div class="corner br"></div>
+<div id="badge"><b>☠ Crime Scene</b><small>First Person · 3D</small></div>
+<div id="hint">Giữ chuột trái + kéo để nhìn · WASD di chuyển · Space nhảy</div>
+<div id="dpad">
+  <div class="btn empty"></div>
+  <div class="btn" id="btn-w">▲</div>
+  <div class="btn" id="btn-jump">↑</div>
+  <div class="btn" id="btn-a">◀</div>
+  <div class="btn" id="btn-s">▼</div>
+  <div class="btn" id="btn-d">▶</div>
+</div>
+<div id="ctrl">
+  <div class="cbtn" id="speed-btn">🚶 NORMAL</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
+<script>
+// ── Renderer ─────────────────────────────────────────────────────
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping    = THREE.NoToneMapping;
+document.body.appendChild(renderer.domElement);
+
+// ── Scene ─────────────────────────────────────────────────────────
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
+
+// ── Camera — YXZ order: yaw quanh Y trước, pitch quanh X sau ──────
+// Đây là cách đúng nhất cho FPS, KHÔNG dùng pivot wrapper
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 500);
+camera.rotation.order = 'YXZ';
+scene.add(camera);
+
+// ── Look angles ──────────────────────────────────────────────────
+let yaw   = 0;  // xoay ngang (Y axis)
+let pitch = 0;  // ngước/cúi (X axis)
+
+function applyLook() {
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+}
+
+// ── Load GLB ─────────────────────────────────────────────────────
+const barFill = document.getElementById('bar-fill');
+const barTxt  = document.getElementById('bar-txt');
+const loader  = new THREE.GLTFLoader();
+const draco   = new THREE.DRACOLoader();
+draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
+loader.setDRACOLoader(draco);
+
+let FLOOR_Y = 0;
+
+loader.load('Crime_Scene.glb',
+  (gltf) => {
+    barFill.style.width = '80%';
+    barTxt.textContent  = 'Đang xử lý...';
+
+    const model = gltf.scene;
+    model.traverse((node) => {
+      if (node.isLight) { node.visible = false; return; }
+      if (!node.isMesh) return;
+      node.castShadow = node.receiveShadow = true;
+      const fix = (mat) => {
+        if (!mat || !mat.map) return mat;
+        const b = new THREE.MeshBasicMaterial({
+          map: mat.map, side: THREE.DoubleSide,
+          transparent: mat.transparent || false,
+          alphaTest: mat.alphaTest || 0,
+        });
+        b.map.encoding = THREE.sRGBEncoding;
+        b.map.needsUpdate = true;
+        return b;
+      };
+      if (Array.isArray(node.material)) node.material = node.material.map(fix);
+      else { const m = fix(node.material); if (m) node.material = m; }
+    });
+    scene.add(model);
+
+    const box    = new THREE.Box3().setFromObject(model);
+    const size   = new THREE.Vector3(); box.getSize(size);
+    const center = new THREE.Vector3(); box.getCenter(center);
+    FLOOR_Y      = box.min.y;
+    window._BOX  = box;
+
+    // Đặt camera ở giữa phòng, cao mắt người
+    camera.position.set(center.x, FLOOR_Y + 1.65, center.z);
+    applyLook();
+
+    barFill.style.width = '100%';
+    barTxt.textContent  = 'Hoàn tất! ✓';
+    setTimeout(() => {
+      const l = document.getElementById('loading');
+      l.style.opacity = '0';
+      setTimeout(() => l.style.display = 'none', 900);
+    }, 300);
+    setTimeout(() => document.getElementById('hint').style.opacity = '0', 8000);
+  },
+  (xhr) => {
+    if (xhr.lengthComputable) {
+      const p = Math.round(xhr.loaded / xhr.total * 78);
+      barFill.style.width = p + '%';
+      barTxt.textContent  = `Đang tải... ${p}%`;
+    }
+  },
+  (err) => {
+    barTxt.textContent = '❌ Không tìm thấy Crime_Scene.glb — đặt 2 file cùng thư mục';
+    barTxt.style.color = '#f55';
+    console.error(err);
+  }
+);
+
+// ── Physics ───────────────────────────────────────────────────────
+const GRAVITY  = -14;
+const JUMP_VEL = 5.5;
+const EYE_H    = 1.65;
+let velY       = 0;
+let onGround   = false;
+
+// ── Mouse look: giữ chuột trái kéo ───────────────────────────────
+let lmb = false, mx = 0, my = 0;
+
+document.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return;
+  if (e.target.closest('#dpad,#ctrl,#badge,#hint')) return;
+  lmb = true; mx = e.clientX; my = e.clientY;
+  document.body.style.cursor = 'grabbing';
+});
+document.addEventListener('mouseup', (e) => {
+  if (e.button !== 0) return;
+  lmb = false;
+  document.body.style.cursor = 'crosshair';
+});
+document.addEventListener('mousemove', (e) => {
+  if (lmb) {
+    yaw   -= (e.clientX - mx) * 0.003;
+    pitch -= (e.clientY - my) * 0.003;
+    pitch  = Math.max(-1.4, Math.min(1.4, pitch));
+    mx = e.clientX; my = e.clientY;
+  } else if (document.pointerLockElement) {
+    yaw   -= e.movementX * 0.002;
+    pitch -= e.movementY * 0.002;
+    pitch  = Math.max(-1.4, Math.min(1.4, pitch));
+  }
+});
+
+// Double-click → Pointer Lock
+renderer.domElement.addEventListener('dblclick', () => renderer.domElement.requestPointerLock());
+document.addEventListener('pointerlockchange', () => {
+  document.body.style.cursor = document.pointerLockElement ? 'none' : 'crosshair';
+});
+
+// ── Touch look ────────────────────────────────────────────────────
+let tid = null, tlx = 0, tly = 0;
+renderer.domElement.addEventListener('touchstart', (e) => {
+  if (e.target.closest('#dpad,#ctrl')) return;
+  if (tid !== null) return;
+  tid = e.changedTouches[0].identifier;
+  tlx = e.changedTouches[0].clientX;
+  tly = e.changedTouches[0].clientY;
+}, { passive: true });
+renderer.domElement.addEventListener('touchmove', (e) => {
+  for (const t of e.changedTouches) {
+    if (t.identifier !== tid) continue;
+    yaw   -= (t.clientX - tlx) * 0.004;
+    pitch -= (t.clientY - tly) * 0.004;
+    pitch  = Math.max(-1.4, Math.min(1.4, pitch));
+    tlx = t.clientX; tly = t.clientY;
+  }
+}, { passive: true });
+renderer.domElement.addEventListener('touchend', (e) => {
+  for (const t of e.changedTouches) if (t.identifier === tid) tid = null;
+}, { passive: true });
+
+// ── Keyboard ─────────────────────────────────────────────────────
+const K = {};
+document.addEventListener('keydown', (e) => {
+  K[e.code] = true;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (onGround) { velY = JUMP_VEL; onGround = false; }
+  }
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+});
+document.addEventListener('keyup', (e) => { K[e.code] = false; });
+
+// ── Speed ─────────────────────────────────────────────────────────
+const SPEEDS  = [4.0, 8.5, 1.5];
+const SLABELS = ['🚶 NORMAL','🏃 FAST','🐢 SLOW'];
+let sMode = 0;
+document.getElementById('speed-btn').addEventListener('click', () => {
+  sMode = (sMode + 1) % 3;
+  document.getElementById('speed-btn').textContent = SLABELS[sMode];
+});
+
+// ── D-pad ─────────────────────────────────────────────────────────
+[['btn-w','KeyW'],['btn-s','KeyS'],['btn-a','KeyA'],['btn-d','KeyD']].forEach(([id,code]) => {
+  const el = document.getElementById(id);
+  const on  = () => { K[code]=true;  el.classList.add('on'); };
+  const off = () => { K[code]=false; el.classList.remove('on'); };
+  el.addEventListener('mousedown',  on);
+  el.addEventListener('touchstart', on,  {passive:true});
+  el.addEventListener('mouseup',    off);
+  el.addEventListener('touchend',   off, {passive:true});
+  el.addEventListener('mouseleave', off);
+});
+const doJump = () => { if (onGround) { velY=JUMP_VEL; onGround=false; } };
+document.getElementById('btn-jump').addEventListener('mousedown',  doJump);
+document.getElementById('btn-jump').addEventListener('touchstart', doJump, {passive:true});
+
+// ── Game Loop ─────────────────────────────────────────────────────
+const clock = new THREE.Clock();
+
+// Vector tái sử dụng, tránh tạo object mới mỗi frame
+const _forward = new THREE.Vector3();
+const _right   = new THREE.Vector3();
+const _up      = new THREE.Vector3(0, 1, 0);
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  // Áp dụng rotation cho camera
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+
+  // ── Movement ─────────────────────────────────────────────────
+  // Tính forward và right từ YAW (bỏ qua pitch để đi thẳng trên mặt phẳng)
+  // forward = hướng camera nhìn, flatten xuống Y=0
+  _forward.set(Math.sin(yaw), 0, -Math.cos(yaw)).normalize();
+  // right = vuông góc phải
+  _right.crossVectors(_forward, _up).normalize();
+
+  const fwd = (K['KeyW']||K['ArrowUp'])    ? 1 : 0;
+  const bck = (K['KeyS']||K['ArrowDown'])  ? 1 : 0;
+  const rgt = (K['KeyD']||K['ArrowRight']) ? 1 : 0;
+  const lft = (K['KeyA']||K['ArrowLeft'])  ? 1 : 0;
+
+  const mf = fwd - bck;  // forward/back
+  const mr = rgt - lft;  // right/left
+
+  if (mf !== 0 || mr !== 0) {
+    const sp = SPEEDS[sMode] * dt;
+    let dx = _forward.x * mf + _right.x * mr;
+    let dz = _forward.z * mf + _right.z * mr;
+    const len = Math.sqrt(dx*dx + dz*dz);
+    camera.position.x += (dx/len) * sp;
+    camera.position.z += (dz/len) * sp;
+  }
+
+  // ── Gravity & jump ────────────────────────────────────────────
+  if (!onGround) velY += GRAVITY * dt;
+  camera.position.y += velY * dt;
+
+  const ground = FLOOR_Y + EYE_H;
+  if (camera.position.y <= ground) {
+    camera.position.y = ground;
+    velY = 0;
+    onGround = true;
+  }
+
+  // ── Boundary clamp ────────────────────────────────────────────
+  if (window._BOX) {
+    const b = window._BOX, m = 0.2;
+    camera.position.x = Math.max(b.min.x+m, Math.min(b.max.x-m, camera.position.x));
+    camera.position.z = Math.max(b.min.z+m, Math.min(b.max.z-m, camera.position.z));
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
