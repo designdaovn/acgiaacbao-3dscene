@@ -339,19 +339,28 @@ function animate() {
   pivot.rotation.y  = yaw;
   camera.rotation.x = pitch;
 
-  // Movement: forward = (sin yaw, 0, -cos yaw), right = (cos yaw, 0, sin yaw)
-  const sinY = Math.sin(yaw);
-  const cosY = Math.cos(yaw);
-  const fwd  = (K['KeyW']||K['ArrowUp'])    ? 1 : 0;
-  const bck  = (K['KeyS']||K['ArrowDown'])  ? 1 : 0;
-  const rgt  = (K['KeyD']||K['ArrowRight']) ? 1 : 0;
-  const lft  = (K['KeyA']||K['ArrowLeft'])  ? 1 : 0;
+  // Movement đúng chuẩn FPS:
+  // - Nhìn theo hướng nào thì W đi theo hướng đó
+  // - Dùng getWorldDirection để lấy hướng nhìn thực của camera
+  const dir = new THREE.Vector3();
+  camera.getWorldDirection(dir);
+  dir.y = 0;          // bỏ trục Y — chỉ đi ngang
+  dir.normalize();
 
-  let dx = sinY*(fwd-bck) + cosY*(rgt-lft);
-  let dz = -cosY*(fwd-bck) + sinY*(rgt-lft);
+  // right = dir x up
+  const right = new THREE.Vector3();
+  right.crossVectors(dir, new THREE.Vector3(0,1,0)).normalize();
+
+  const fwd = (K['KeyW']||K['ArrowUp'])    ? 1 : 0;
+  const bck = (K['KeyS']||K['ArrowDown'])  ? 1 : 0;
+  const rgt = (K['KeyD']||K['ArrowRight']) ? 1 : 0;
+  const lft = (K['KeyA']||K['ArrowLeft'])  ? 1 : 0;
+
+  const sp = SPEEDS[sMode] * dt;
+  let dx = dir.x*(fwd-bck) + right.x*(rgt-lft);
+  let dz = dir.z*(fwd-bck) + right.z*(rgt-lft);
   const len = Math.sqrt(dx*dx + dz*dz);
   if (len > 0) {
-    const sp = SPEEDS[sMode] * dt;
     pivot.position.x += dx/len * sp;
     pivot.position.z += dz/len * sp;
   }
