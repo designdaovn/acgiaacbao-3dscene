@@ -6,9 +6,8 @@
 <title>Crime Scene — First Person</title>
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
-body { overflow:hidden; background:#111; font-family:'Segoe UI',sans-serif; }
+body { overflow:hidden; background:#111; font-family:'Segoe UI',sans-serif; cursor:crosshair; }
 canvas { display:block; }
-
 #loading {
   position:fixed; inset:0; background:#0d0d12;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -19,7 +18,6 @@ canvas { display:block; }
 #bar { width:260px; height:3px; background:#1a1a2a; border-radius:2px; overflow:hidden; }
 #bar-fill { height:100%; width:0%; background:linear-gradient(90deg,#cc3333,#ff6666); transition:width 0.2s; }
 #bar-txt { color:#555; margin-top:10px; font-size:0.72rem; }
-
 #xhair {
   position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
   width:16px; height:16px; pointer-events:none; z-index:50;
@@ -27,15 +25,13 @@ canvas { display:block; }
 #xhair::before,#xhair::after { content:''; position:absolute; background:rgba(255,80,80,0.95); border-radius:1px; }
 #xhair::before { width:2px; height:100%; left:50%; transform:translateX(-50%); }
 #xhair::after  { width:100%; height:2px; top:50%; transform:translateY(-50%); }
-
 #badge {
   position:fixed; top:16px; left:16px; z-index:50; pointer-events:none;
   background:rgba(0,0,0,0.75); border:1px solid rgba(180,30,30,0.4);
   border-radius:10px; padding:8px 14px; backdrop-filter:blur(10px);
 }
-#badge b     { color:#cc3333; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; display:block; }
+#badge b { color:#cc3333; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; display:block; }
 #badge small { color:#555; font-size:10px; }
-
 #hint {
   position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:50;
   background:rgba(0,0,0,0.75); color:rgba(255,200,200,0.9);
@@ -43,7 +39,6 @@ canvas { display:block; }
   border:1px solid rgba(180,50,50,0.3); backdrop-filter:blur(8px);
   pointer-events:none; transition:opacity 1.5s; white-space:nowrap;
 }
-
 #dpad {
   position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
   display:grid; grid-template-columns:repeat(3,52px); grid-template-rows:repeat(2,52px);
@@ -59,7 +54,6 @@ canvas { display:block; }
 .btn:active,.btn.on { background:rgba(200,50,50,0.5); transform:scale(0.91); }
 .btn.empty { visibility:hidden; pointer-events:none; }
 #btn-jump { border-color:rgba(80,140,255,0.5); color:rgba(160,200,255,0.95); }
-
 #ctrl {
   position:fixed; bottom:24px; right:14px;
   display:flex; flex-direction:column; gap:7px; z-index:100;
@@ -70,7 +64,6 @@ canvas { display:block; }
   border-radius:9px; cursor:pointer; backdrop-filter:blur(8px); text-align:center;
 }
 .cbtn:hover { background:rgba(160,30,30,0.35); }
-
 .corner { position:fixed; width:20px; height:20px; border-color:rgba(200,30,30,0.45); border-style:solid; pointer-events:none; z-index:45; }
 .corner.tl{top:10px;left:10px;border-width:2px 0 0 2px}
 .corner.tr{top:10px;right:10px;border-width:2px 2px 0 0}
@@ -79,20 +72,17 @@ canvas { display:block; }
 </style>
 </head>
 <body>
-
 <div id="loading">
   <h1>☠ Crime Scene</h1>
   <p>First Person Explorer</p>
   <div id="bar"><div id="bar-fill"></div></div>
   <div id="bar-txt">Đang tải...</div>
 </div>
-
 <div id="xhair"></div>
 <div class="corner tl"></div><div class="corner tr"></div>
 <div class="corner bl"></div><div class="corner br"></div>
 <div id="badge"><b>☠ Crime Scene</b><small>First Person · 3D</small></div>
 <div id="hint">Giữ chuột trái + kéo để nhìn · WASD di chuyển · Space nhảy</div>
-
 <div id="dpad">
   <div class="btn empty"></div>
   <div class="btn" id="btn-w">▲</div>
@@ -101,7 +91,6 @@ canvas { display:block; }
   <div class="btn" id="btn-s">▼</div>
   <div class="btn" id="btn-d">▶</div>
 </div>
-
 <div id="ctrl">
   <div class="cbtn" id="speed-btn">🚶 NORMAL</div>
 </div>
@@ -114,7 +103,6 @@ canvas { display:block; }
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
-// KEY: sRGBEncoding + NoToneMapping để màu texture hiển thị đúng
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping    = THREE.NoToneMapping;
 document.body.appendChild(renderer.domElement);
@@ -123,14 +111,22 @@ document.body.appendChild(renderer.domElement);
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87CEEB);
 
-// ── FPS Camera setup ──────────────────────────────────────────────
-const pivot  = new THREE.Object3D(); // xoay trái/phải (yaw)
+// ── Camera — YXZ order: yaw quanh Y trước, pitch quanh X sau ──────
+// Đây là cách đúng nhất cho FPS, KHÔNG dùng pivot wrapper
 const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 500);
 camera.rotation.order = 'YXZ';
-pivot.add(camera);
-scene.add(pivot);
+scene.add(camera);
 
-// ── Load GLB ──────────────────────────────────────────────────────
+// ── Look angles ──────────────────────────────────────────────────
+let yaw   = 0;  // xoay ngang (Y axis)
+let pitch = 0;  // ngước/cúi (X axis)
+
+function applyLook() {
+  camera.rotation.y = yaw;
+  camera.rotation.x = pitch;
+}
+
+// ── Load GLB ─────────────────────────────────────────────────────
 const barFill = document.getElementById('bar-fill');
 const barTxt  = document.getElementById('bar-txt');
 const loader  = new THREE.GLTFLoader();
@@ -143,69 +139,46 @@ let FLOOR_Y = 0;
 loader.load('Crime_Scene.glb',
   (gltf) => {
     barFill.style.width = '80%';
-    barTxt.textContent = 'Đang xử lý...';
+    barTxt.textContent  = 'Đang xử lý...';
 
     const model = gltf.scene;
-
     model.traverse((node) => {
-      // Tắt tất cả lights trong GLB — Sun intensity=683 gây overexposed
-      if (node.isLight) {
-        node.visible = false;
-        return;
-      }
+      if (node.isLight) { node.visible = false; return; }
       if (!node.isMesh) return;
-
-      node.castShadow    = true;
-      node.receiveShadow = true;
-
-      const upgrade = (mat) => {
+      node.castShadow = node.receiveShadow = true;
+      const fix = (mat) => {
         if (!mat || !mat.map) return mat;
-
-        // Dùng MeshBasicMaterial: hiển thị texture ĐÚNG màu, không bị ảnh hưởng bởi lighting
-        const basic = new THREE.MeshBasicMaterial({
-          map:         mat.map,
-          side:        THREE.DoubleSide,
+        const b = new THREE.MeshBasicMaterial({
+          map: mat.map, side: THREE.DoubleSide,
           transparent: mat.transparent || false,
-          alphaTest:   mat.alphaTest   || 0,
+          alphaTest: mat.alphaTest || 0,
         });
-        // Fix texture encoding
-        basic.map.encoding    = THREE.sRGBEncoding;
-        basic.map.needsUpdate = true;
-        return basic;
+        b.map.encoding = THREE.sRGBEncoding;
+        b.map.needsUpdate = true;
+        return b;
       };
-
-      if (Array.isArray(node.material)) {
-        node.material = node.material.map(upgrade);
-      } else {
-        const upgraded = upgrade(node.material);
-        if (upgraded) node.material = upgraded;
-      }
+      if (Array.isArray(node.material)) node.material = node.material.map(fix);
+      else { const m = fix(node.material); if (m) node.material = m; }
     });
-
     scene.add(model);
 
-    // Tính bounds và đặt camera
     const box    = new THREE.Box3().setFromObject(model);
     const size   = new THREE.Vector3(); box.getSize(size);
     const center = new THREE.Vector3(); box.getCenter(center);
+    FLOOR_Y      = box.min.y;
+    window._BOX  = box;
 
-    console.log('Size:', size.x.toFixed(2), size.y.toFixed(2), size.z.toFixed(2));
-    console.log('Center:', center.x.toFixed(2), center.y.toFixed(2), center.z.toFixed(2));
-
-    FLOOR_Y     = box.min.y;
-    window._BOX = box;
-
-    pivot.position.set(center.x, FLOOR_Y + 1.65, center.z);
+    // Đặt camera ở giữa phòng, cao mắt người
+    camera.position.set(center.x, FLOOR_Y + 1.65, center.z);
+    applyLook();
 
     barFill.style.width = '100%';
     barTxt.textContent  = 'Hoàn tất! ✓';
-
     setTimeout(() => {
       const l = document.getElementById('loading');
       l.style.opacity = '0';
       setTimeout(() => l.style.display = 'none', 900);
     }, 300);
-
     setTimeout(() => document.getElementById('hint').style.opacity = '0', 8000);
   },
   (xhr) => {
@@ -222,26 +195,20 @@ loader.load('Crime_Scene.glb',
   }
 );
 
-// ── FPS State ────────────────────────────────────────────────────
+// ── Physics ───────────────────────────────────────────────────────
 const GRAVITY  = -14;
 const JUMP_VEL = 5.5;
 const EYE_H    = 1.65;
 let velY       = 0;
 let onGround   = false;
-let yaw        = 0;
-let pitch      = 0;
 
-// ── Mouse: giữ chuột trái + kéo ──────────────────────────────────
-// Gắn trực tiếp lên document (không dùng div overlay chặn event)
+// ── Mouse look: giữ chuột trái kéo ───────────────────────────────
 let lmb = false, mx = 0, my = 0;
 
 document.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
-  // Không xử lý nếu click vào UI buttons
-  if (e.target.closest('#dpad, #ctrl, #badge, #hint')) return;
-  lmb = true;
-  mx  = e.clientX;
-  my  = e.clientY;
+  if (e.target.closest('#dpad,#ctrl,#badge,#hint')) return;
+  lmb = true; mx = e.clientX; my = e.clientY;
   document.body.style.cursor = 'grabbing';
 });
 document.addEventListener('mouseup', (e) => {
@@ -254,12 +221,8 @@ document.addEventListener('mousemove', (e) => {
     yaw   -= (e.clientX - mx) * 0.003;
     pitch -= (e.clientY - my) * 0.003;
     pitch  = Math.max(-1.4, Math.min(1.4, pitch));
-    mx = e.clientX;
-    my = e.clientY;
-    return;
-  }
-  // Pointer Lock mode
-  if (document.pointerLockElement) {
+    mx = e.clientX; my = e.clientY;
+  } else if (document.pointerLockElement) {
     yaw   -= e.movementX * 0.002;
     pitch -= e.movementY * 0.002;
     pitch  = Math.max(-1.4, Math.min(1.4, pitch));
@@ -267,18 +230,15 @@ document.addEventListener('mousemove', (e) => {
 });
 
 // Double-click → Pointer Lock
-renderer.domElement.addEventListener('dblclick', () => {
-  renderer.domElement.requestPointerLock();
-});
+renderer.domElement.addEventListener('dblclick', () => renderer.domElement.requestPointerLock());
 document.addEventListener('pointerlockchange', () => {
   document.body.style.cursor = document.pointerLockElement ? 'none' : 'crosshair';
 });
 
-// ── Touch look (mobile) ───────────────────────────────────────────
+// ── Touch look ────────────────────────────────────────────────────
 let tid = null, tlx = 0, tly = 0;
 renderer.domElement.addEventListener('touchstart', (e) => {
-  // bỏ qua nếu chạm vào UI
-  if (e.target.closest('#dpad, #ctrl')) return;
+  if (e.target.closest('#dpad,#ctrl')) return;
   if (tid !== null) return;
   tid = e.changedTouches[0].identifier;
   tlx = e.changedTouches[0].clientX;
@@ -301,7 +261,10 @@ renderer.domElement.addEventListener('touchend', (e) => {
 const K = {};
 document.addEventListener('keydown', (e) => {
   K[e.code] = true;
-  if (e.code === 'Space') { e.preventDefault(); if (onGround) { velY = JUMP_VEL; onGround = false; } }
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (onGround) { velY = JUMP_VEL; onGround = false; }
+  }
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
 });
 document.addEventListener('keyup', (e) => { K[e.code] = false; });
@@ -332,53 +295,63 @@ document.getElementById('btn-jump').addEventListener('touchstart', doJump, {pass
 
 // ── Game Loop ─────────────────────────────────────────────────────
 const clock = new THREE.Clock();
+
+// Vector tái sử dụng, tránh tạo object mới mỗi frame
+const _forward = new THREE.Vector3();
+const _right   = new THREE.Vector3();
+const _up      = new THREE.Vector3(0, 1, 0);
+
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  pivot.rotation.y  = yaw;
+  // Áp dụng rotation cho camera
+  camera.rotation.y = yaw;
   camera.rotation.x = pitch;
 
-  // Movement: chỉ dùng YAW để tính hướng, KHÔNG dùng pitch
-  // forward  = ( sin(yaw), 0, -cos(yaw) )  — hướng nhìn trên mặt phẳng XZ
-  // right    = ( cos(yaw), 0,  sin(yaw) )  — vuông góc bên phải
+  // ── Movement ─────────────────────────────────────────────────
+  // Forward và Right vectors đúng với Three.js rotation.y = yaw
+  // Three.js: rotation.y=θ → world look direction = (-sinθ, 0, -cosθ)
+  // forward = (-sin(yaw), 0, -cos(yaw))
+  // right   = (-fz, 0, fx) = (cos(yaw), 0, -sin(yaw))
+  const FX = -Math.sin(yaw);   // forward X
+  const FZ = -Math.cos(yaw);   // forward Z
+  const RX = -FZ;              // right X = cos(yaw)
+  const RZ =  FX;              // right Z = -sin(yaw)
+
   const fwd = (K['KeyW']||K['ArrowUp'])    ? 1 : 0;
   const bck = (K['KeyS']||K['ArrowDown'])  ? 1 : 0;
   const rgt = (K['KeyD']||K['ArrowRight']) ? 1 : 0;
   const lft = (K['KeyA']||K['ArrowLeft'])  ? 1 : 0;
 
-  const moveZ = fwd - bck;   // +1 = tiến, -1 = lùi
-  const moveX = rgt - lft;   // +1 = phải, -1 = trái
+  const mf = fwd - bck;
+  const mr = rgt - lft;
 
-  if (moveZ !== 0 || moveX !== 0) {
-    const sp  = SPEEDS[sMode] * dt;
-    const sinY = Math.sin(yaw);
-    const cosY = Math.cos(yaw);
-
-    // forward vector:  (sinY, 0, -cosY)
-    // right   vector:  (cosY, 0,  sinY)
-    let dx = sinY * moveZ + cosY * moveX;
-    let dz = -cosY * moveZ + sinY * moveX;
-
-    // normalize để chéo không nhanh hơn thẳng
+  if (mf !== 0 || mr !== 0) {
+    const sp = SPEEDS[sMode] * dt;
+    const dx = FX * mf + RX * mr;
+    const dz = FZ * mf + RZ * mr;
     const len = Math.sqrt(dx*dx + dz*dz);
-    pivot.position.x += (dx / len) * sp;
-    pivot.position.z += (dz / len) * sp;
+    camera.position.x += (dx/len) * sp;
+    camera.position.z += (dz/len) * sp;
   }
 
-  // Gravity
+  // ── Gravity & jump ────────────────────────────────────────────
   if (!onGround) velY += GRAVITY * dt;
-  pivot.position.y += velY * dt;
-  if (pivot.position.y <= FLOOR_Y + EYE_H) {
-    pivot.position.y = FLOOR_Y + EYE_H;
-    velY = 0; onGround = true;
+  camera.position.y += velY * dt;
+
+  const ground = FLOOR_Y + EYE_H;
+  if (camera.position.y <= ground) {
+    camera.position.y = ground;
+    velY = 0;
+    onGround = true;
   }
 
-  // Boundary
+  // ── Boundary clamp ────────────────────────────────────────────
   if (window._BOX) {
-    const b=window._BOX, m=0.2;
-    pivot.position.x = Math.max(b.min.x+m, Math.min(b.max.x-m, pivot.position.x));
-    pivot.position.z = Math.max(b.min.z+m, Math.min(b.max.z-m, pivot.position.z));
+    const b = window._BOX, m = 0.2;
+    camera.position.x = Math.max(b.min.x+m, Math.min(b.max.x-m, camera.position.x));
+    camera.position.z = Math.max(b.min.z+m, Math.min(b.max.z-m, camera.position.z));
   }
 
   renderer.render(scene, camera);
