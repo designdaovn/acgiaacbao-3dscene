@@ -7,8 +7,7 @@
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { overflow:hidden; background:#111; font-family:'Segoe UI',sans-serif; }
-canvas { display:block; }
-
+canvas { display:block; cursor:crosshair; }
 #loading {
   position:fixed; inset:0; background:#0a0a0f;
   display:flex; flex-direction:column; align-items:center; justify-content:center;
@@ -22,18 +21,18 @@ canvas { display:block; }
 
 #xhair {
   position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-  width:14px; height:14px; pointer-events:none; z-index:50;
+  width:16px; height:16px; pointer-events:none; z-index:50;
 }
 #xhair::before,#xhair::after { content:''; position:absolute; background:rgba(255,80,80,0.9); border-radius:1px; }
 #xhair::before { width:2px; height:100%; left:50%; transform:translateX(-50%); }
 #xhair::after  { width:100%; height:2px; top:50%; transform:translateY(-50%); }
 
 #badge {
-  position:fixed; top:16px; left:16px; z-index:50;
-  background:rgba(0,0,0,0.75); border:1px solid rgba(180,30,30,0.4);
-  border-radius:10px; padding:8px 14px; backdrop-filter:blur(10px); pointer-events:none;
+  position:fixed; top:16px; left:16px; z-index:50; pointer-events:none;
+  background:rgba(0,0,0,0.7); border:1px solid rgba(180,30,30,0.4);
+  border-radius:10px; padding:8px 14px; backdrop-filter:blur(10px);
 }
-#badge b { color:#cc3333; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; display:block; }
+#badge b     { color:#cc3333; font-size:12px; letter-spacing:0.12em; text-transform:uppercase; display:block; }
 #badge small { color:#555; font-size:10px; }
 
 #hint {
@@ -68,16 +67,14 @@ canvas { display:block; }
 .cbtn {
   background:rgba(0,0,0,0.65); border:1px solid rgba(200,60,60,0.35);
   color:#cc6666; font-size:11px; padding:7px 11px;
-  border-radius:9px; cursor:pointer; backdrop-filter:blur(8px);
-  letter-spacing:0.04em; text-align:center;
+  border-radius:9px; cursor:pointer; backdrop-filter:blur(8px); text-align:center;
 }
 .cbtn:hover { background:rgba(160,30,30,0.35); }
 
-/* look zone for mobile touch */
 #lookzone {
   position:fixed; top:0; left:0;
   width:100%; height:calc(100% - 190px);
-  z-index:10; cursor:crosshair;
+  z-index:10;
 }
 
 .corner { position:fixed; width:20px; height:20px; border-color:rgba(200,30,30,0.4); border-style:solid; pointer-events:none; z-index:45; }
@@ -100,9 +97,8 @@ canvas { display:block; }
 <div id="xhair"></div>
 <div class="corner tl"></div><div class="corner tr"></div>
 <div class="corner bl"></div><div class="corner br"></div>
-
 <div id="badge"><b>☠ Crime Scene</b><small>First Person · 3D</small></div>
-<div id="hint">WASD / mũi tên di chuyển · Giữ chuột trái để nhìn · Space nhảy</div>
+<div id="hint">Giữ chuột trái + kéo để nhìn · WASD di chuyển · Space nhảy</div>
 
 <div id="dpad">
   <div class="btn empty"></div>
@@ -124,147 +120,123 @@ canvas { display:block; }
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js"></script>
 <script>
-// ── Renderer ──────────────────────────────────────────────────────
+// ── Renderer ─────────────────────────────────────────────────────
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.outputEncoding = THREE.sRGBEncoding;
-renderer.toneMapping = THREE.NoToneMapping;
+renderer.shadowMap.type    = THREE.PCFSoftShadowMap;
+renderer.outputEncoding    = THREE.sRGBEncoding;
+// NoToneMapping + physicallyCorrectLights=false để giữ màu gốc của texture
+renderer.toneMapping              = THREE.NoToneMapping;
+renderer.physicallyCorrectLights  = false;
 document.body.appendChild(renderer.domElement);
 
-// ── Scene ─────────────────────────────────────────────────────────
+// ── Scene ────────────────────────────────────────────────────────
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x87CEEB); // sky blue default
+scene.background = new THREE.Color(0x222222);
 
-// ── Camera ────────────────────────────────────────────────────────
-// FPS: pivot controls yaw, camera head controls pitch
+// ── Camera pivot (FPS) ───────────────────────────────────────────
+// pivot = thân người (quay trái/phải)
+// camera = đầu (nhìn lên/xuống)
 const pivot  = new THREE.Object3D();
-const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 500);
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 500);
 camera.rotation.order = 'YXZ';
 pivot.add(camera);
 scene.add(pivot);
 
-// ── Lights — đủ sáng, không overexposed ───────────────────────────
-// Ambient vừa phải
-const ambLight = new THREE.AmbientLight(0xffffff, 0.8);
-scene.add(ambLight);
-
-// Key light
-const keyLight = new THREE.DirectionalLight(0xffffff, 0.9);
-keyLight.position.set(5, 10, 5);
-keyLight.castShadow = true;
-keyLight.shadow.mapSize.set(2048, 2048);
-keyLight.shadow.camera.near = 0.1;
-keyLight.shadow.camera.far = 100;
-keyLight.shadow.camera.left = -20;
-keyLight.shadow.camera.right = 20;
-keyLight.shadow.camera.top = 20;
-keyLight.shadow.camera.bottom = -20;
-scene.add(keyLight);
-
-// Fill lights from multiple angles
-const fill1 = new THREE.DirectionalLight(0xffffff, 0.6);
-fill1.position.set(-5, 8, -5);
-scene.add(fill1);
-
-const fill2 = new THREE.DirectionalLight(0xffffff, 0.4);
-fill2.position.set(5, 3, -8);
-scene.add(fill2);
-
-// ── Load GLB ──────────────────────────────────────────────────────
+// ── Load GLB ─────────────────────────────────────────────────────
 const barFill = document.getElementById('bar-fill');
 const barTxt  = document.getElementById('bar-txt');
 
-const glLoader = new THREE.GLTFLoader();
-const draco    = new THREE.DRACOLoader();
+const gltfLoader = new THREE.GLTFLoader();
+const draco      = new THREE.DRACOLoader();
 draco.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
-glLoader.setDRACOLoader(draco);
+gltfLoader.setDRACOLoader(draco);
 
 let FLOOR_Y = 0;
 
-glLoader.load('Crime_Scene.glb',
+gltfLoader.load('Crime_Scene.glb',
   (gltf) => {
-    barFill.style.width = '85%';
-    barTxt.textContent = 'Đang xử lý...';
+    barFill.style.width = '80%';
+    barTxt.textContent  = 'Đang xử lý materials...';
 
     const model = gltf.scene;
 
+    // ── Điều chỉnh đèn có sẵn trong GLB (Sun intensity=683 → quá sáng) ──
     model.traverse((node) => {
+      // Giảm intensity của tất cả lights trong scene
+      if (node.isLight) {
+        console.log('Light found:', node.type, 'intensity:', node.intensity);
+        if (node.isDirectionalLight || node.isPointLight || node.isSpotLight) {
+          // Normalize intensity về mức hợp lý
+          node.intensity = Math.min(node.intensity, 2.0);
+        }
+      }
+
       if (!node.isMesh) return;
 
-      // Fix negative scale — causes inverted normals & missing textures
-      // We need to recompute normals for meshes with negative scale determinant
-      const s = node.getWorldScale(new THREE.Vector3());
-      const hasNegScale = (s.x * s.y * s.z) < 0;
-
-      node.castShadow = true;
+      node.castShadow    = true;
       node.receiveShadow = true;
 
-      const fixMat = (mat) => {
+      const fixMaterial = (mat) => {
         if (!mat) return;
 
-        // DoubleSide fixes negative-scale face culling issue
+        // DoubleSide: fix negative-scale nodes + thin walls
         mat.side = THREE.DoubleSide;
 
-        // Correct texture color space
-        const sRGBKeys = ['map', 'emissiveMap'];
-        const linearKeys = ['normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'lightMap'];
+        // Fix texture encoding
+        if (mat.map) {
+          mat.map.encoding    = THREE.sRGBEncoding;
+          mat.map.needsUpdate = true;
+        }
+        if (mat.emissiveMap) {
+          mat.emissiveMap.encoding    = THREE.sRGBEncoding;
+          mat.emissiveMap.needsUpdate = true;
+        }
 
-        sRGBKeys.forEach(k => {
-          if (mat[k]) { mat[k].encoding = THREE.sRGBEncoding; mat[k].needsUpdate = true; }
-        });
-        linearKeys.forEach(k => {
-          if (mat[k]) { mat[k].encoding = THREE.LinearEncoding; mat[k].needsUpdate = true; }
-        });
-
-        // Don't let metalness wash out texture
-        if (mat.metalness !== undefined && mat.metalness > 0.9) mat.metalness = 0.3;
         mat.needsUpdate = true;
       };
 
-      if (Array.isArray(node.material)) node.material.forEach(fixMat);
-      else fixMat(node.material);
+      if (Array.isArray(node.material)) node.material.forEach(fixMaterial);
+      else fixMaterial(node.material);
     });
 
     scene.add(model);
 
-    // Compute bounds
+    // ── Thêm ambient light nhẹ để fill shadow ──
+    // (không thêm directional vì GLB đã có Sun)
+    scene.add(new THREE.AmbientLight(0xffffff, 0.4));
+
+    // ── Auto-fit camera ──
     const box    = new THREE.Box3().setFromObject(model);
     const size   = new THREE.Vector3(); box.getSize(size);
     const center = new THREE.Vector3(); box.getCenter(center);
 
-    console.log('Model bounds — size:', size, 'center:', center);
+    console.log('Room size:', size.x.toFixed(1), size.y.toFixed(1), size.z.toFixed(1));
+    console.log('Room center:', center.x.toFixed(1), center.y.toFixed(1), center.z.toFixed(1));
 
-    FLOOR_Y = box.min.y;
-    window._BOX = box;
+    FLOOR_Y      = box.min.y;
+    window._BOX  = box;
 
-    // Place player inside the room at center
     pivot.position.set(center.x, FLOOR_Y + 1.65, center.z);
 
-    // Fog distance based on room size
-    const roomRadius = Math.max(size.x, size.z);
-    scene.fog = new THREE.Fog(0x111111, roomRadius * 0.8, roomRadius * 3);
-
     barFill.style.width = '100%';
-    barTxt.textContent = 'Hoàn tất! ✓';
+    barTxt.textContent  = 'Hoàn tất! ✓';
 
     setTimeout(() => {
       const l = document.getElementById('loading');
       l.style.opacity = '0';
-      setTimeout(() => { l.style.display = 'none'; }, 900);
+      setTimeout(() => l.style.display = 'none', 900);
     }, 300);
 
-    setTimeout(() => {
-      document.getElementById('hint').style.opacity = '0';
-    }, 8000);
+    setTimeout(() => document.getElementById('hint').style.opacity = '0', 8000);
   },
   (xhr) => {
     if (xhr.lengthComputable) {
-      const p = Math.round(xhr.loaded / xhr.total * 82);
+      const p = Math.round(xhr.loaded / xhr.total * 78);
       barFill.style.width = p + '%';
-      barTxt.textContent = `Đang tải... ${p}%`;
+      barTxt.textContent  = `Đang tải... ${p}%`;
     }
   },
   (err) => {
@@ -274,86 +246,77 @@ glLoader.load('Crime_Scene.glb',
   }
 );
 
-// ── FPS Physics ───────────────────────────────────────────────────
-const GRAVITY    = -14;
-const JUMP_VEL   = 5.5;
-const EYE_H      = 1.65;
-let velY         = 0;
-let onGround     = false;
-let yawAngle     = 0;
-let pitchAngle   = 0;
+// ── FPS State ────────────────────────────────────────────────────
+const GRAVITY   = -14;
+const JUMP_VEL  = 5.5;
+const EYE_H     = 1.65;
+let velY        = 0;
+let onGround    = false;
+let yaw         = 0;   // quay trái/phải
+let pitch       = 0;   // nhìn lên/xuống
 
-// ── Mouse Look — giữ chuột trái để nhìn ──────────────────────────
-let mouseDown = false;
-let lastMouseX = 0, lastMouseY = 0;
+// ── Mouse: giữ trái kéo để nhìn ─────────────────────────────────
+let lmbDown = false, mLastX = 0, mLastY = 0;
 
-// Desktop: giữ chuột trái kéo để xoay
 renderer.domElement.addEventListener('mousedown', (e) => {
-  if (e.button === 0) { // left button
-    mouseDown = true;
-    lastMouseX = e.clientX;
-    lastMouseY = e.clientY;
-    renderer.domElement.style.cursor = 'grabbing';
-  }
+  if (e.button !== 0) return;
+  lmbDown = true;
+  mLastX  = e.clientX;
+  mLastY  = e.clientY;
+  renderer.domElement.style.cursor = 'grabbing';
 });
 window.addEventListener('mouseup', (e) => {
-  if (e.button === 0) {
-    mouseDown = false;
-    renderer.domElement.style.cursor = 'crosshair';
-  }
+  if (e.button !== 0) return;
+  lmbDown = false;
+  renderer.domElement.style.cursor = 'crosshair';
 });
 window.addEventListener('mousemove', (e) => {
-  if (!mouseDown) return;
-  const dx = e.clientX - lastMouseX;
-  const dy = e.clientY - lastMouseY;
-  yawAngle   -= dx * 0.003;
-  pitchAngle -= dy * 0.003;
-  pitchAngle  = Math.max(-1.4, Math.min(1.4, pitchAngle));
-  lastMouseX  = e.clientX;
-  lastMouseY  = e.clientY;
+  if (!lmbDown) return;
+  yaw   -= (e.clientX - mLastX) * 0.003;
+  pitch -= (e.clientY - mLastY) * 0.003;
+  pitch  = Math.max(-1.4, Math.min(1.4, pitch));
+  mLastX = e.clientX;
+  mLastY = e.clientY;
 });
 
-// Also support Pointer Lock (click canvas to lock)
+// Double-click → Pointer Lock (optional chế độ game)
 renderer.domElement.addEventListener('dblclick', () => {
   renderer.domElement.requestPointerLock();
 });
 document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement) {
-    renderer.domElement.style.cursor = 'none';
-  } else {
-    renderer.domElement.style.cursor = 'crosshair';
-  }
+  const locked = !!document.pointerLockElement;
+  renderer.domElement.style.cursor = locked ? 'none' : 'crosshair';
 });
 document.addEventListener('mousemove', (e) => {
   if (!document.pointerLockElement) return;
-  yawAngle   -= e.movementX * 0.002;
-  pitchAngle -= e.movementY * 0.002;
-  pitchAngle  = Math.max(-1.4, Math.min(1.4, pitchAngle));
+  yaw   -= e.movementX * 0.002;
+  pitch -= e.movementY * 0.002;
+  pitch  = Math.max(-1.4, Math.min(1.4, pitch));
 });
 
-// ── Touch look (mobile) ───────────────────────────────────────────
-let touchId = null, tLastX = 0, tLastY = 0;
+// ── Touch look (mobile) ──────────────────────────────────────────
+let touchId = null, tLX = 0, tLY = 0;
 const lz = document.getElementById('lookzone');
 lz.addEventListener('touchstart', e => {
   if (touchId !== null) return;
   touchId = e.changedTouches[0].identifier;
-  tLastX  = e.changedTouches[0].clientX;
-  tLastY  = e.changedTouches[0].clientY;
+  tLX = e.changedTouches[0].clientX;
+  tLY = e.changedTouches[0].clientY;
 }, { passive: true });
 lz.addEventListener('touchmove', e => {
   for (const t of e.changedTouches) {
     if (t.identifier !== touchId) continue;
-    yawAngle   -= (t.clientX - tLastX) * 0.004;
-    pitchAngle -= (t.clientY - tLastY) * 0.004;
-    pitchAngle  = Math.max(-1.4, Math.min(1.4, pitchAngle));
-    tLastX = t.clientX; tLastY = t.clientY;
+    yaw   -= (t.clientX - tLX) * 0.004;
+    pitch -= (t.clientY - tLY) * 0.004;
+    pitch  = Math.max(-1.4, Math.min(1.4, pitch));
+    tLX = t.clientX; tLY = t.clientY;
   }
 }, { passive: true });
 lz.addEventListener('touchend', e => {
   for (const t of e.changedTouches) if (t.identifier === touchId) touchId = null;
 }, { passive: true });
 
-// ── Keyboard ──────────────────────────────────────────────────────
+// ── Keyboard ────────────────────────────────────────────────────
 const K = {};
 document.addEventListener('keydown', (e) => {
   K[e.code] = true;
@@ -365,7 +328,7 @@ document.addEventListener('keydown', (e) => {
 });
 document.addEventListener('keyup', (e) => { K[e.code] = false; });
 
-// ── Speed ────────────────────────────────────────────────────────
+// ── Speed ───────────────────────────────────────────────────────
 const SPEEDS  = [4.0, 8.5, 1.5];
 const SLABELS = ['🚶 NORMAL', '🏃 FAST', '🐢 SLOW'];
 let sMode = 0;
@@ -373,12 +336,12 @@ document.getElementById('speed-btn').addEventListener('click', () => {
   sMode = (sMode + 1) % 3;
   document.getElementById('speed-btn').textContent = SLABELS[sMode];
 });
-window.addEventListener('wheel', (e) => {
+window.addEventListener('wheel', e => {
   sMode = e.deltaY < 0 ? 1 : 0;
   document.getElementById('speed-btn').textContent = SLABELS[sMode];
 }, { passive: true });
 
-// ── D-pad ────────────────────────────────────────────────────────
+// ── D-pad ───────────────────────────────────────────────────────
 const PAD = { 'btn-w':'KeyW', 'btn-s':'KeyS', 'btn-a':'KeyA', 'btn-d':'KeyD' };
 for (const [id, code] of Object.entries(PAD)) {
   const el = document.getElementById(id);
@@ -390,52 +353,61 @@ for (const [id, code] of Object.entries(PAD)) {
   el.addEventListener('touchend',   off, { passive: true });
   el.addEventListener('mouseleave', off);
 }
-const jBtn = document.getElementById('btn-jump');
 const doJump = () => { if (onGround) { velY = JUMP_VEL; onGround = false; } };
-jBtn.addEventListener('mousedown',  doJump);
-jBtn.addEventListener('touchstart', doJump, { passive: true });
+document.getElementById('btn-jump').addEventListener('mousedown',  doJump);
+document.getElementById('btn-jump').addEventListener('touchstart', doJump, { passive: true });
 
-// ── Game Loop ─────────────────────────────────────────────────────
+// ── Game Loop ────────────────────────────────────────────────────
 const clock = new THREE.Clock();
 
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
 
-  // Apply look rotation
-  pivot.rotation.y  = yawAngle;
-  camera.rotation.x = pitchAngle;
+  // Apply rotation
+  pivot.rotation.y  = yaw;
+  camera.rotation.x = pitch;
 
-  // Movement
-  const speed  = SPEEDS[sMode] * dt;
-  const sinY   = Math.sin(yawAngle);
-  const cosY   = Math.cos(yawAngle);
-  const fwd    = (K['KeyW'] || K['ArrowUp'])    ? 1 : 0;
-  const bck    = (K['KeyS'] || K['ArrowDown'])  ? 1 : 0;
-  const lft    = (K['KeyA'] || K['ArrowLeft'])  ? 1 : 0;
-  const rgt    = (K['KeyD'] || K['ArrowRight']) ? 1 : 0;
+  // ── Movement: dùng forward vector từ yaw ──
+  // sin/cos của yaw cho hướng nhìn trên mặt phẳng XZ
+  const s = Math.sin(yaw);   // trục X của hướng nhìn
+  const c = Math.cos(yaw);   // trục Z của hướng nhìn
 
-  let dx =  sinY * (fwd - bck) + cosY * (rgt - lft);
-  let dz = -cosY * (fwd - bck) + sinY * (rgt - lft);
-  const len = Math.sqrt(dx*dx + dz*dz);
-  if (len > 0) { dx = dx/len * speed; dz = dz/len * speed; }
+  // forward = (sin(yaw), 0, -cos(yaw))  — Three.js: -Z là trước
+  // right   = (cos(yaw), 0,  sin(yaw))
 
-  pivot.position.x += dx;
-  pivot.position.z += dz;
+  const fwd = (K['KeyW'] || K['ArrowUp'])    ? 1 : 0;
+  const bck = (K['KeyS'] || K['ArrowDown'])  ? 1 : 0;
+  const rgt = (K['KeyD'] || K['ArrowRight']) ? 1 : 0;
+  const lft = (K['KeyA'] || K['ArrowLeft'])  ? 1 : 0;
 
-  // Gravity
+  const moveF = fwd - bck;  // +1 tiến, -1 lùi
+  const moveR = rgt - lft;  // +1 phải, -1 trái
+
+  let dx =  s * moveF + c * moveR;
+  let dz = -c * moveF + s * moveR;
+
+  // Normalize diagonal
+  const len = Math.sqrt(dx * dx + dz * dz);
+  if (len > 0) {
+    const sp = SPEEDS[sMode] * dt;
+    pivot.position.x += (dx / len) * sp;
+    pivot.position.z += (dz / len) * sp;
+  }
+
+  // Gravity & jump
   if (!onGround) velY += GRAVITY * dt;
   pivot.position.y += velY * dt;
 
-  // Floor collision
+  // Floor
   const floorLevel = FLOOR_Y + EYE_H;
   if (pivot.position.y <= floorLevel) {
     pivot.position.y = floorLevel;
-    velY = 0;
+    velY     = 0;
     onGround = true;
   }
 
-  // Soft boundary
+  // Boundary
   if (window._BOX) {
     const b = window._BOX, m = 0.2;
     pivot.position.x = Math.max(b.min.x + m, Math.min(b.max.x - m, pivot.position.x));
