@@ -311,20 +311,22 @@ function animate() {
 
   // ── Movement ──────────────────────────────────────────────────
   // Dùng getWorldDirection SAU KHI đã set rotation → luôn đúng
+  // Lấy hướng nhìn từ camera
   const dir = new THREE.Vector3();
   camera.getWorldDirection(dir);
   dir.y = 0;
   dir.normalize();
 
-  // right vector: cross(up, forward) — cho ra vector sang PHẢI
-  const right = new THREE.Vector3(0, 1, 0).cross(dir).normalize();
+  // right = xoay forward -90° (CCW từ trên nhìn xuống) = sang PHẢI
+  const rightX =  dir.z;
+  const rightZ = -dir.x;
 
-  const mf = ((K['KeyW']||K['ArrowUp']) ? 1:0) - ((K['KeyS']||K['ArrowDown']) ? 1:0);
-  const mr = ((K['KeyD']||K['ArrowRight']) ? 1:0) - ((K['KeyA']||K['ArrowLeft']) ? 1:0);
+  const mf = ((K['KeyW']||K['ArrowUp'])    ? 1:0) - ((K['KeyS']||K['ArrowDown'])  ? 1:0);
+  const mr = ((K['KeyA']||K['ArrowLeft'])  ? 1:0) - ((K['KeyD']||K['ArrowRight']) ? 1:0);
 
   if (mf !== 0 || mr !== 0) {
-    const dx  = dir.x * mf + right.x * mr;
-    const dz  = dir.z * mf + right.z * mr;
+    const dx  = dir.x * mf + rightX * mr;
+    const dz  = dir.z * mf + rightZ * mr;
     const len = Math.sqrt(dx*dx + dz*dz);
     const sp  = SPEEDS[sMode] * dt;
     camera.position.x += (dx/len) * sp;
