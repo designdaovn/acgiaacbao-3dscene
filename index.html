@@ -83,6 +83,36 @@ canvas { display:block; }
 <div class="corner bl"></div><div class="corner br"></div>
 <div id="badge"><b>☠ Crime Scene</b><small>First Person · 3D</small></div>
 <div id="hint">Giữ chuột trái + kéo để nhìn · WASD di chuyển · Space nhảy</div>
+<div id="inspect-label" style="
+  position:fixed; bottom:120px; left:50%; transform:translateX(-50%);
+  background:rgba(0,0,0,0.75); color:#fff; padding:6px 16px;
+  border-radius:20px; font-size:12px; letter-spacing:0.05em;
+  border:1px solid rgba(255,255,255,0.15); backdrop-filter:blur(8px);
+  pointer-events:none; z-index:50; display:none;
+  max-width:80vw; text-align:center;
+">
+  <span id="inspect-name" style="color:#ffdd88"></span>
+</div>
+<div id="interact-prompt" style="
+  position:fixed; bottom:160px; left:50%; transform:translateX(-50%);
+  background:rgba(200,50,50,0.85); color:#fff; padding:7px 20px;
+  border-radius:20px; font-size:12px; font-weight:bold; letter-spacing:0.08em;
+  pointer-events:none; z-index:50; display:none;
+">
+  Nhấn <kbd style='background:rgba(255,255,255,0.2);padding:1px 6px;border-radius:4px'>E</kbd> để tương tác
+</div>
+<div id="interact-popup" style="
+  position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:rgba(10,10,20,0.95); color:#eee; padding:20px 28px;
+  border-radius:14px; font-size:13px; line-height:1.7;
+  border:1px solid rgba(200,50,50,0.4); backdrop-filter:blur(12px);
+  pointer-events:none; z-index:60; display:none; max-width:340px;
+  text-align:center; box-shadow:0 0 40px rgba(0,0,0,0.6);
+">
+  <div id="popup-title" style="color:#ff8888;font-size:14px;font-weight:bold;margin-bottom:8px"></div>
+  <div id="popup-body"></div>
+  <div style="margin-top:12px;color:#555;font-size:11px">Nhấn E hoặc Esc để đóng</div>
+</div>
 <div id="dpad">
   <div class="btn empty"></div>
   <div class="btn" id="btn-w">▲</div>
@@ -296,6 +326,51 @@ document.getElementById('btn-jump').addEventListener('touchstart', doJump, {pass
 // ── Game Loop ─────────────────────────────────────────────────────
 const clock = new THREE.Clock();
 
+// ── Raycaster (nhìn vào vật nào thì hiện tên) ─────────────────────
+const raycaster  = new THREE.Raycaster();
+const screenCenter = new THREE.Vector2(0, 0); // giữa màn hình
+
+// ── Dữ liệu tương tác — thêm vật vào đây ─────────────────────────
+// key = tên node/mesh, value = nội dung hiển thị khi nhấn E
+const INTERACTIONS = {
+  // Ví dụ mặc định — bạn có thể thay bằng tên mesh thực tế:
+  'Plane.001':           { title: '🩸 Vết máu', body: 'Có vết máu trên mặt đất. Nhóm máu AB+. Cần phân tích thêm.' },
+  'Bulletin':            { title: '📋 Bảng thông tin', body: 'Bảng ghi chú của nạn nhân. Có địa chỉ và số điện thoại lạ.' },
+  'model_0':             { title: '📋 Bảng thông tin', body: 'Bảng ghi chú của nạn nhân. Có địa chỉ và số điện thoại lạ.' },
+  'door_Door_material_0':{ title: '🚪 Cánh cửa', body: 'Cửa bị khóa từ bên trong. Không có dấu hiệu bị phá.' },
+  'Triple Monitor_Palette_0': { title: '🖥️ Màn hình máy tính', body: 'Màn hình vẫn còn bật. Có tài liệu mật đang mở.' },
+  'Folder_Palette_0':    { title: '📁 Hồ sơ', body: 'Hồ sơ bí mật. Tên: OPERATION X. Ngày: 15/03/2024.' },
+  'Paper_Palette_0':     { title: '📄 Tờ giấy', body: 'Một tờ giấy viết tay: "Họ biết tôi ở đây. Đừng tin ai."' },
+};
+
+let currentHit   = null;  // mesh đang nhìn vào
+let popupOpen    = false;
+
+// Đóng popup
+function closePopup() {
+  document.getElementById('interact-popup').style.display = 'none';
+  popupOpen = false;
+}
+
+// Mở popup tương tác
+function openPopup(name) {
+  const data = INTERACTIONS[name];
+  if (!data) return;
+  document.getElementById('popup-title').textContent = data.title;
+  document.getElementById('popup-body').textContent  = data.body;
+  document.getElementById('interact-popup').style.display = 'block';
+  popupOpen = true;
+}
+
+// Phím E và Esc
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyE') {
+    if (popupOpen) { closePopup(); return; }
+    if (currentHit && INTERACTIONS[currentHit]) openPopup(currentHit);
+  }
+  if (e.code === 'Escape') closePopup();
+});
+
 // Vector tái sử dụng, tránh tạo object mới mỗi frame
 const _forward = new THREE.Vector3();
 const _right   = new THREE.Vector3();
@@ -349,6 +424,29 @@ function animate() {
     const b = window._BOX, m = 0.2;
     camera.position.x = Math.max(b.min.x+m, Math.min(b.max.x-m, camera.position.x));
     camera.position.z = Math.max(b.min.z+m, Math.min(b.max.z-m, camera.position.z));
+  }
+
+  // ── Raycast từ giữa màn hình ────────────────────────────────────
+  if (!popupOpen) {
+    raycaster.setFromCamera(screenCenter, camera);
+    const hits = raycaster.intersectObjects(scene.children, true);
+
+    const inspectEl  = document.getElementById('inspect-label');
+    const promptEl   = document.getElementById('interact-prompt');
+    const nameEl     = document.getElementById('inspect-name');
+
+    if (hits.length > 0 && hits[0].distance < 4.0) {
+      const obj  = hits[0].object;
+      const name = obj.name || obj.parent?.name || '';
+      currentHit = name;
+      nameEl.textContent = '🔍 ' + name;
+      inspectEl.style.display = 'block';
+      promptEl.style.display  = INTERACTIONS[name] ? 'block' : 'none';
+    } else {
+      currentHit = null;
+      inspectEl.style.display = 'none';
+      promptEl.style.display  = 'none';
+    }
   }
 
   renderer.render(scene, camera);
