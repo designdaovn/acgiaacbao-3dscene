@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ác Giả Ác Báo</title>
+<title>Crime Scene — First Person</title>
 <!-- Favicon — đặt file ảnh cùng thư mục với index.html trên GitHub -->
-<link rel="icon" type="image/png" href="favicon-16x16.png">
-<link rel="apple-touch-icon" href="favicon-16x16.png">
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { overflow:hidden; background:#111; font-family:'Segoe UI',sans-serif; cursor:crosshair; }
@@ -570,238 +570,21 @@ updateRotateBtn();
 // ── D-pad ─────────────────────────────────────────────────────────
 [['btn-w','KeyW'],['btn-s','KeyS'],['btn-a','KeyA'],['btn-d','KeyD']].forEach(([id,code]) => {
   const el = document.getElementById(id);
-  const on  = (e) => {
-    e.preventDefault();          // chặn bôi đen, context menu
-    K[code]=true;
-    el.classList.add('on');
-  };
-  const off = (e) => {
-    K[code]=false;
-    el.classList.remove('on');
-  };
-  el.addEventListener('mousedown',   on,  {passive:false});
-  el.addEventListener('touchstart',  on,  {passive:false});
+  const on  = () => { K[code]=true;  el.classList.add('on'); };
+  const off = () => { K[code]=false; el.classList.remove('on'); };
+  el.addEventListener('mousedown',   on);
+  el.addEventListener('touchstart',  on,  {passive:true});
   el.addEventListener('mouseup',     off);
   el.addEventListener('mouseleave',  off);
   el.addEventListener('touchend',    off, {passive:true});
-  el.addEventListener('touchcancel', off, {passive:true}); // ngón tay trượt ra ngoài
+  el.addEventListener('touchcancel', off, {passive:true});
 });
 
-const doJump = (e) => {
-  if (e) e.preventDefault();
-  if (onGround) { velY=JUMP_VEL; onGround=false; }
-};
-const jumpEl = document.getElementById('btn-jump');
-jumpEl.addEventListener('mousedown',   doJump, {passive:false});
-jumpEl.addEventListener('touchstart',  doJump, {passive:false});
-jumpEl.addEventListener('touchend',    ()=>{}, {passive:true});
-jumpEl.addEventListener('touchcancel', ()=>{}, {passive:true});
-// Chặn context menu trên jump
-jumpEl.addEventListener('contextmenu', e => e.preventDefault());
-document.getElementById('jump-wrap').addEventListener('contextmenu', e => e.preventDefault());
+const doJump = () => { if (onGround) { velY=JUMP_VEL; onGround=false; } };
+document.getElementById('btn-jump').addEventListener('mousedown',  doJump);
+document.getElementById('btn-jump').addEventListener('touchstart', doJump, {passive:true});
+document.getElementById('btn-jump').addEventListener('touchend',   ()=>{}, {passive:true});
+const SPEEDS = [4.0];
+let sMode = 0;
 
-// ── Game Loop ─────────────────────────────────────────────────────
-const clock = new THREE.Clock();
 
-// ── Raycaster (nhìn vào vật nào thì hiện tên) ─────────────────────
-const raycaster  = new THREE.Raycaster();
-const screenCenter = new THREE.Vector2(0, 0); // giữa màn hình
-
-// ── Dữ liệu tương tác — thêm vật vào đây ─────────────────────────
-// key = tên node/mesh, value = nội dung hiển thị khi nhấn E
-const INTERACTIONS = {
-  // Ví dụ mặc định — bạn có thể thay bằng tên mesh thực tế:
-  'Plane.001':           { title: '🩸 Vết máu', body: 'Có vết máu trên mặt đất. Nhóm máu AB+. Cần phân tích thêm.' },
-  'Bulletin':            { title: '📋 Bảng thông tin', body: 'Bảng ghi chú của nạn nhân. Có địa chỉ và số điện thoại lạ.' },
-  'model_0':             { title: '📋 Bảng thông tin', body: 'Bảng ghi chú của nạn nhân. Có địa chỉ và số điện thoại lạ.' },
-  'door_Door_material_0':{ title: '🚪 Cánh cửa', body: 'Cửa bị khóa từ bên trong. Không có dấu hiệu bị phá.' },
-  'Triple Monitor_Palette_0': { title: '🖥️ Màn hình máy tính', body: 'Màn hình vẫn còn bật. Có tài liệu mật đang mở.' },
-  'Folder_Palette_0':    { title: '📁 Hồ sơ', body: 'Hồ sơ bí mật. Tên: OPERATION X. Ngày: 15/03/2024.' },
-  'Paper_Palette_0':     { title: '📄 Tờ giấy', body: 'Một tờ giấy viết tay: "Họ biết tôi ở đây. Đừng tin ai."' },
-};
-
-let currentHit   = null;  // mesh đang nhìn vào
-let popupOpen    = false;
-
-// Đóng popup
-function closePopup() {
-  document.getElementById('interact-popup').style.display = 'none';
-  popupOpen = false;
-}
-
-// Mở popup tương tác
-function openPopup(name) {
-  const data = INTERACTIONS[name];
-  if (!data) return;
-  document.getElementById('popup-title').textContent = data.title;
-  document.getElementById('popup-body').textContent  = data.body;
-  document.getElementById('interact-popup').style.display = 'block';
-  popupOpen = true;
-}
-
-// ── Tính vị trí bottom cho label (tránh bị d-pad che) ───────────────
-function updateLabelPositions() {
-  const dpadEl = document.getElementById('dpad');
-  const dpadH  = dpadEl.offsetHeight;
-  const labelBottom  = 20 + dpadH + 12;
-  const promptBottom = labelBottom + 36;
-  document.getElementById('inspect-label').style.bottom  = labelBottom  + 'px';
-  document.getElementById('interact-prompt').style.bottom = promptBottom + 'px';
-  // VR button: đặt trên #ctrl
-  const ctrlEl = document.getElementById('ctrl');
-  const ctrlH  = ctrlEl.offsetHeight;
-  document.getElementById('vr-btn').style.bottom = (20 + ctrlH + 10) + 'px';
-}
-updateLabelPositions();
-window.addEventListener('resize', updateLabelPositions);
-
-// ── Nút ⊙ giữa d-pad = tương tác (thay cho btn-interact) ────────────
-const centerBtn = document.getElementById('btn-center');
-const doInteract = (e) => {
-  if (e) e.preventDefault();
-  if (popupOpen) { closePopup(); return; }
-  if (currentHit && INTERACTIONS[currentHit]) openPopup(currentHit);
-};
-centerBtn.addEventListener('click',      doInteract);
-centerBtn.addEventListener('touchstart', doInteract, { passive: false });
-
-// ── Tap vào popup để đóng (mobile) ───────────────────────────────────
-document.getElementById('interact-popup').addEventListener('click', closePopup);
-document.getElementById('interact-popup').addEventListener('touchstart', (e) => {
-  e.stopPropagation(); closePopup();
-}, { passive: true });
-
-// Phím E và Esc
-document.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyE') {
-    if (popupOpen) { closePopup(); return; }
-    if (currentHit && INTERACTIONS[currentHit]) openPopup(currentHit);
-  }
-  if (e.code === 'Escape') closePopup();
-});
-
-// Chặn context menu (menu chuột phải/giữ) trên toàn bộ d-pad
-document.getElementById('dpad').addEventListener('contextmenu', e => e.preventDefault());
-
-// Vector tái sử dụng, tránh tạo object mới mỗi frame
-const _forward = new THREE.Vector3();
-const _right   = new THREE.Vector3();
-const _up      = new THREE.Vector3(0, 1, 0);
-
-function animate() {
-  requestAnimationFrame(animate);
-  const dt = Math.min(clock.getDelta(), 0.05);
-
-  // Áp dụng rotation
-  camera.rotation.y = yaw;
-  camera.rotation.x = pitch;
-
-  // ── Movement ──────────────────────────────────────────────────
-  // Dùng getWorldDirection SAU KHI đã set rotation → luôn đúng
-  // Lấy hướng nhìn từ camera
-  const dir = new THREE.Vector3();
-  camera.getWorldDirection(dir);
-  dir.y = 0;
-  dir.normalize();
-
-  // right = xoay forward -90° (CCW từ trên nhìn xuống) = sang PHẢI
-  const rightX =  dir.z;
-  const rightZ = -dir.x;
-
-  const mf = ((K['KeyW']||K['ArrowUp'])    ? 1:0) - ((K['KeyS']||K['ArrowDown'])  ? 1:0);
-  const mr = ((K['KeyA']||K['ArrowLeft'])  ? 1:0) - ((K['KeyD']||K['ArrowRight']) ? 1:0);
-
-  if (mf !== 0 || mr !== 0) {
-    const dx  = dir.x * mf + rightX * mr;
-    const dz  = dir.z * mf + rightZ * mr;
-    const len = Math.sqrt(dx*dx + dz*dz);
-    const sp  = SPEEDS[sMode] * dt;
-    camera.position.x += (dx/len) * sp;
-    camera.position.z += (dz/len) * sp;
-  }
-
-  // ── Gravity & jump ────────────────────────────────────────────
-  if (!onGround) velY += GRAVITY * dt;
-  camera.position.y += velY * dt;
-
-  const ground = FLOOR_Y + EYE_H;
-  if (camera.position.y <= ground) {
-    camera.position.y = ground;
-    velY = 0;
-    onGround = true;
-  }
-
-  // ── Boundary clamp ────────────────────────────────────────────
-  if (window._BOX) {
-    const b = window._BOX, m = 0.2;
-    camera.position.x = Math.max(b.min.x+m, Math.min(b.max.x-m, camera.position.x));
-    camera.position.z = Math.max(b.min.z+m, Math.min(b.max.z-m, camera.position.z));
-  }
-
-  // ── Raycast từ giữa màn hình ────────────────────────────────────
-  if (!popupOpen) {
-    raycaster.setFromCamera(screenCenter, camera);
-    const hits = raycaster.intersectObjects(scene.children, true);
-
-    const inspectEl  = document.getElementById('inspect-label');
-    const promptEl   = document.getElementById('interact-prompt');
-    const nameEl     = document.getElementById('inspect-name');
-
-    if (hits.length > 0 && hits[0].distance < 4.0) {
-      const obj  = hits[0].object;
-      const name = obj.name || obj.parent?.name || '';
-      currentHit = name;
-      nameEl.textContent = '🔍 ' + name;
-      inspectEl.style.display = 'block';
-      promptEl.style.display  = INTERACTIONS[name] ? 'block' : 'none';
-    } else {
-      currentHit = null;
-      inspectEl.style.display = 'none';
-      promptEl.style.display  = 'none';
-    }
-  }
-
-  renderer.render(scene, camera);
-}
-animate();
-
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth/window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
-
-// ════════════════════════════════════════════════════════
-// VR / QR POPUP
-// ══ CHỈNH SỬA LINK TẠI ĐÂY ══════════════════════════════
-const VR_LINK = 'https://scnry.app/QlJoq6iKEWb';
-// ═════════════════════════════════════════════════════════
-
-const vrBtn      = document.getElementById('vr-btn');
-const qrOverlay  = document.getElementById('qr-overlay');
-const qrCloseBtn = document.getElementById('qr-close-btn');
-const qrCopyBtn  = document.getElementById('qr-copy-btn');
-const qrOpenBtn  = document.getElementById('qr-open-btn');
-const qrCopied   = document.getElementById('qr-copied-msg');
-
-vrBtn.addEventListener('click',     () => qrOverlay.classList.add('open'));
-vrBtn.addEventListener('touchstart', (e) => { e.stopPropagation(); qrOverlay.classList.add('open'); }, { passive:true });
-
-function closeQR() { qrOverlay.classList.remove('open'); }
-qrCloseBtn.addEventListener('click', closeQR);
-qrOverlay.addEventListener('click', (e) => { if (e.target === qrOverlay) closeQR(); });
-
-qrCopyBtn.addEventListener('click', () => {
-  navigator.clipboard.writeText(VR_LINK).then(() => {
-    qrCopied.textContent = '✓ Đã copy!';
-    setTimeout(() => qrCopied.textContent = '', 2000);
-  }).catch(() => {
-    qrCopied.textContent = VR_LINK;
-  });
-});
-
-qrOpenBtn.addEventListener('click', () => window.open(VR_LINK, '_blank'));
-
-</script>
-</body>
-</html>
