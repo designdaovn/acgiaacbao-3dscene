@@ -338,7 +338,8 @@ loader.load('Crime_Scene.glb',
     barTxt.textContent  = 'Đang xử lý...';
 
     const model = gltf.scene;
-    // Tắt hết đèn gốc trong GLB (Sun=683 quá mạnh, gây bóng cứng xấu)
+
+    // Tắt đèn gốc GLB (Sun intensity=683 quá mạnh)
     model.traverse((node) => {
       if (node.isLight) { node.visible = false; return; }
       if (!node.isMesh) return;
@@ -347,48 +348,30 @@ loader.load('Crime_Scene.glb',
 
       const fix = (mat) => {
         if (!mat) return mat;
-        // MeshStandardMaterial với roughness cao = bề mặt mờ, không bóng loáng
-        // Đây là material duy nhất hiển thị đúng chiều sâu + màu texture đồng thời
         const std = new THREE.MeshStandardMaterial({
-          map:          mat.map  || null,
-          color:        mat.map  ? 0xffffff : (mat.color || new THREE.Color(0.8, 0.8, 0.8)),
-          roughness:    0.95,   // rất mờ → không bị loáng
-          metalness:    0.0,
-          side:         THREE.DoubleSide,
-          transparent:  mat.transparent || false,
-          alphaTest:    mat.alphaTest   || 0,
-          envMapIntensity: 0,
+          map:         mat.map || null,
+          color:       mat.map ? 0xffffff : (mat.color || new THREE.Color(0.8,0.8,0.8)),
+          roughness:   0.95,
+          metalness:   0.0,
+          side:        THREE.DoubleSide,
+          transparent: mat.transparent || false,
+          alphaTest:   mat.alphaTest   || 0,
         });
-        if (std.map) {
-          std.map.encoding    = THREE.sRGBEncoding;
-          std.map.needsUpdate = true;
-        }
+        if (std.map) { std.map.encoding = THREE.sRGBEncoding; std.map.needsUpdate = true; }
         return std;
       };
-
       if (Array.isArray(node.material)) node.material = node.material.map(fix);
       else { const m = fix(node.material); if (m) node.material = m; }
     });
 
-    // Hệ thống đèn mới: nhiều hướng → mặt nào cũng có sáng/tối tự nhiên
-    // Key light — hướng chính từ trên cao góc 45°
+    // 3-point lighting system
     const keyLight = new THREE.DirectionalLight(0xfff5e0, 1.2);
-    keyLight.position.set(5, 10, 5);
-    keyLight.castShadow = true;
-    keyLight.shadow.mapSize.set(2048, 2048);
-    scene.add(keyLight);
-
-    // Fill light — đối diện key, yếu hơn để fill bóng
+    keyLight.position.set(5, 10, 5); keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048,2048); scene.add(keyLight);
     const fillLight = new THREE.DirectionalLight(0xe0f0ff, 0.5);
-    fillLight.position.set(-5, 4, -5);
-    scene.add(fillLight);
-
-    // Rim light — từ sau tạo viền sáng cho vật
+    fillLight.position.set(-5, 4, -5); scene.add(fillLight);
     const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
-    rimLight.position.set(0, 3, -10);
-    scene.add(rimLight);
-
-    // Ambient — fill toàn bộ, tránh bóng đen tuyệt đối
+    rimLight.position.set(0, 3, -10); scene.add(rimLight);
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
     scene.add(model);
