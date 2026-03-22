@@ -338,43 +338,59 @@ loader.load('Crime_Scene.glb',
     barTxt.textContent  = 'Đang xử lý...';
 
     const model = gltf.scene;
+    // Tắt hết đèn gốc trong GLB (Sun=683 quá mạnh, gây bóng cứng xấu)
     model.traverse((node) => {
-      // Giảm đèn GLB (Sun intensity=683 → 1.2) thay vì tắt hẳn
-      if (node.isDirectionalLight || node.isPointLight || node.isSpotLight) {
-        node.intensity = Math.min(node.intensity, 1.2);
-        node.castShadow = true;
-        return;
-      }
-      if (node.isLight) return; // bỏ các light khác
-
+      if (node.isLight) { node.visible = false; return; }
       if (!node.isMesh) return;
       node.castShadow    = true;
       node.receiveShadow = true;
 
       const fix = (mat) => {
         if (!mat) return mat;
-        // MeshLambertMaterial: có lighting → tạo chiều sâu, bóng khối
-        // nhưng nhẹ hơn MeshStandardMaterial, không bị overexposed
-        const lam = new THREE.MeshLambertMaterial({
-          map:         mat.map  || null,
-          color:       mat.map  ? 0xffffff : (mat.color || new THREE.Color(0.75, 0.75, 0.75)),
-          side:        THREE.DoubleSide,
-          transparent: mat.transparent || false,
-          alphaTest:   mat.alphaTest   || 0,
+        // MeshStandardMaterial với roughness cao = bề mặt mờ, không bóng loáng
+        // Đây là material duy nhất hiển thị đúng chiều sâu + màu texture đồng thời
+        const std = new THREE.MeshStandardMaterial({
+          map:          mat.map  || null,
+          color:        mat.map  ? 0xffffff : (mat.color || new THREE.Color(0.8, 0.8, 0.8)),
+          roughness:    0.95,   // rất mờ → không bị loáng
+          metalness:    0.0,
+          side:         THREE.DoubleSide,
+          transparent:  mat.transparent || false,
+          alphaTest:    mat.alphaTest   || 0,
+          envMapIntensity: 0,
         });
-        if (lam.map) {
-          lam.map.encoding    = THREE.sRGBEncoding;
-          lam.map.needsUpdate = true;
+        if (std.map) {
+          std.map.encoding    = THREE.sRGBEncoding;
+          std.map.needsUpdate = true;
         }
-        return lam;
+        return std;
       };
 
       if (Array.isArray(node.material)) node.material = node.material.map(fix);
       else { const m = fix(node.material); if (m) node.material = m; }
     });
 
-    // Ambient light fill — tránh bóng tối quá đen
-    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+    // Hệ thống đèn mới: nhiều hướng → mặt nào cũng có sáng/tối tự nhiên
+    // Key light — hướng chính từ trên cao góc 45°
+    const keyLight = new THREE.DirectionalLight(0xfff5e0, 1.2);
+    keyLight.position.set(5, 10, 5);
+    keyLight.castShadow = true;
+    keyLight.shadow.mapSize.set(2048, 2048);
+    scene.add(keyLight);
+
+    // Fill light — đối diện key, yếu hơn để fill bóng
+    const fillLight = new THREE.DirectionalLight(0xe0f0ff, 0.5);
+    fillLight.position.set(-5, 4, -5);
+    scene.add(fillLight);
+
+    // Rim light — từ sau tạo viền sáng cho vật
+    const rimLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    rimLight.position.set(0, 3, -10);
+    scene.add(rimLight);
+
+    // Ambient — fill toàn bộ, tránh bóng đen tuyệt đối
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+
     scene.add(model);
 
     const box    = new THREE.Box3().setFromObject(model);
