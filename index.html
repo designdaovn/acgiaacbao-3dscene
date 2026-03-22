@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Crime Scene — First Person</title>
+<!-- Favicon — đặt file ảnh cùng thư mục với index.html trên GitHub -->
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
 body { overflow:hidden; background:#111; font-family:'Segoe UI',sans-serif; cursor:crosshair; }
@@ -49,27 +52,67 @@ canvas { display:block; }
   white-space:nowrap; max-width:calc(100vw - 160px); overflow:hidden; text-overflow:ellipsis;
 }
 
-/* ── D-pad — trái, to hơn trên mobile ── */
+/* ── D-pad — hình thập tự chuẩn ── */
 #dpad {
   position:fixed; bottom:20px; left:16px;
   display:grid;
   grid-template-columns:repeat(3, var(--btn-size));
-  grid-template-rows:repeat(2, var(--btn-size));
-  gap:5px; z-index:100;
-  --btn-size: clamp(52px, 14vw, 68px);
+  grid-template-rows:repeat(3, var(--btn-size));
+  gap:4px; z-index:100;
+  --btn-size: clamp(48px, 13vw, 62px);
+  user-select:none;
+  -webkit-user-select:none;
+  -moz-user-select:none;
+  -ms-user-select:none;
+}
+/* Nút Jump riêng — góc phải bên cạnh d-pad */
+#jump-wrap {
+  position:fixed; bottom:20px; left:calc(16px + var(--dpad-w) + 10px);
+  display:flex; align-items:flex-end;
+  z-index:100;
+  --dpad-size: clamp(48px, 13vw, 62px);
+  --dpad-w: calc(var(--dpad-size) * 3 + 8px);
 }
 .btn {
+  /* Kích thước do grid cha quyết định — không cần set width/height */
   background:rgba(0,0,0,0.6); border:1px solid rgba(200,60,60,0.4);
   border-radius:12px; color:rgba(255,160,160,0.9);
   font-size:clamp(16px,4.5vw,22px);
   cursor:pointer; display:flex; align-items:center; justify-content:center;
-  user-select:none; -webkit-tap-highlight-color:transparent;
+  user-select:none;
+  -webkit-user-select:none;
+  -moz-user-select:none;
+  -ms-user-select:none;
+  -webkit-tap-highlight-color:transparent;
+  -webkit-touch-callout:none;
   backdrop-filter:blur(6px); transition:background 0.1s,transform 0.08s;
   touch-action:none;
+  /* Đảm bảo tỉ lệ vuông */
+  aspect-ratio:1/1;
 }
 .btn:active,.btn.on { background:rgba(200,50,50,0.5); transform:scale(0.91); }
 .btn.empty { visibility:hidden; pointer-events:none; }
-#btn-jump { border-color:rgba(80,140,255,0.5); color:rgba(160,200,255,0.95); }
+.btn-center {
+  background:rgba(255,255,255,0.06) !important;
+  border-color:rgba(200,60,60,0.2) !important;
+  color:rgba(255,160,160,0.35) !important;
+  font-size:clamp(12px,3vw,16px) !important;
+  pointer-events:none; /* nút giữa không có chức năng */
+}
+/* Nút jump độc lập */
+#btn-jump {
+  width:clamp(48px,13vw,62px); height:clamp(48px,13vw,62px);
+  background:rgba(0,0,0,0.6);
+  border:1px solid rgba(80,140,255,0.5);
+  border-radius:12px; color:rgba(160,200,255,0.95);
+  font-size:clamp(16px,4.5vw,22px);
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  user-select:none; -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none;
+  backdrop-filter:blur(6px); transition:background 0.1s,transform 0.08s;
+  touch-action:none; aspect-ratio:1/1;
+}
+#btn-jump:active, #btn-jump.on { background:rgba(50,80,200,0.5); transform:scale(0.91); }
 
 /* ── Controls panel — phải ── */
 #ctrl {
@@ -224,7 +267,7 @@ canvas { display:block; }
    Desktop / màn hình lớn
 ════════════════════════════════════════ */
 @media (min-width:768px) {
-  #dpad { --btn-size:58px; }
+  #dpad { --btn-size:54px; }
   .cbtn { font-size:11px; }
 }
 </style>
@@ -253,12 +296,22 @@ canvas { display:block; }
   <div id="popup-close-hint">Nhấn E hoặc Esc để đóng</div>
 </div>
 <div id="dpad">
+  <!-- Hàng 1 -->
   <div class="btn empty"></div>
   <div class="btn" id="btn-w">▲</div>
-  <div class="btn" id="btn-jump">↑</div>
+  <div class="btn empty"></div>
+  <!-- Hàng 2 -->
   <div class="btn" id="btn-a">◀</div>
-  <div class="btn" id="btn-s">▼</div>
+  <div class="btn btn-center" id="btn-center">⊙</div>
   <div class="btn" id="btn-d">▶</div>
+  <!-- Hàng 3 -->
+  <div class="btn empty"></div>
+  <div class="btn" id="btn-s">▼</div>
+  <div class="btn empty"></div>
+</div>
+<!-- Jump nút riêng biệt bên cạnh -->
+<div id="jump-wrap">
+  <div id="btn-jump">↑</div>
 </div>
 <div id="ctrl">
   <div class="cbtn" id="speed-btn">🚶 NORMAL</div>
@@ -494,17 +547,35 @@ document.getElementById('speed-btn').addEventListener('click', () => {
 // ── D-pad ─────────────────────────────────────────────────────────
 [['btn-w','KeyW'],['btn-s','KeyS'],['btn-a','KeyA'],['btn-d','KeyD']].forEach(([id,code]) => {
   const el = document.getElementById(id);
-  const on  = () => { K[code]=true;  el.classList.add('on'); };
-  const off = () => { K[code]=false; el.classList.remove('on'); };
-  el.addEventListener('mousedown',  on);
-  el.addEventListener('touchstart', on,  {passive:true});
-  el.addEventListener('mouseup',    off);
-  el.addEventListener('touchend',   off, {passive:true});
-  el.addEventListener('mouseleave', off);
+  const on  = (e) => {
+    e.preventDefault();          // chặn bôi đen, context menu
+    K[code]=true;
+    el.classList.add('on');
+  };
+  const off = (e) => {
+    K[code]=false;
+    el.classList.remove('on');
+  };
+  el.addEventListener('mousedown',   on,  {passive:false});
+  el.addEventListener('touchstart',  on,  {passive:false});
+  el.addEventListener('mouseup',     off);
+  el.addEventListener('mouseleave',  off);
+  el.addEventListener('touchend',    off, {passive:true});
+  el.addEventListener('touchcancel', off, {passive:true}); // ngón tay trượt ra ngoài
 });
-const doJump = () => { if (onGround) { velY=JUMP_VEL; onGround=false; } };
-document.getElementById('btn-jump').addEventListener('mousedown',  doJump);
-document.getElementById('btn-jump').addEventListener('touchstart', doJump, {passive:true});
+
+const doJump = (e) => {
+  if (e) e.preventDefault();
+  if (onGround) { velY=JUMP_VEL; onGround=false; }
+};
+const jumpEl = document.getElementById('btn-jump');
+jumpEl.addEventListener('mousedown',   doJump, {passive:false});
+jumpEl.addEventListener('touchstart',  doJump, {passive:false});
+jumpEl.addEventListener('touchend',    ()=>{}, {passive:true});
+jumpEl.addEventListener('touchcancel', ()=>{}, {passive:true});
+// Chặn context menu trên jump
+jumpEl.addEventListener('contextmenu', e => e.preventDefault());
+document.getElementById('jump-wrap').addEventListener('contextmenu', e => e.preventDefault());
 
 // ── Game Loop ─────────────────────────────────────────────────────
 const clock = new THREE.Clock();
@@ -584,6 +655,9 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.code === 'Escape') closePopup();
 });
+
+// Chặn context menu (menu chuột phải/giữ) trên toàn bộ d-pad
+document.getElementById('dpad').addEventListener('contextmenu', e => e.preventDefault());
 
 // Vector tái sử dụng, tránh tạo object mới mỗi frame
 const _forward = new THREE.Vector3();
