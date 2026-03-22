@@ -106,35 +106,33 @@ canvas { display:block; }
   background:rgba(200,50,50,0.45) !important; transform:scale(0.93);
 }
 /* Nút fullscreen */
-#fs-btn {
-  position:fixed; right:12px; z-index:101;
-  width:clamp(44px,12vw,54px); height:clamp(44px,12vw,54px);
-  background:rgba(0,0,0,0.7); border:1px solid rgba(255,200,80,0.45);
-  border-radius:50%; cursor:pointer;
+/* ══ Right buttons — fs / vr / rotate ══ */
+#right-btns {
+  position:fixed; right:12px; bottom:20px;
+  position:fixed; right:12px; bottom:20px;
+  display:flex; flex-direction:column;
+  align-items:center; gap:8px; z-index:101;
+}
+/* Tất cả 3 nút: cùng kích thước, thẳng hàng, căn phải */
+#fs-btn, #vr-btn, #rotate-btn {
+  --rbtn: clamp(44px, 11vw, 50px);
+  width:var(--rbtn); height:var(--rbtn);
+  border-radius:12px; cursor:pointer;
   display:flex; align-items:center; justify-content:center;
-  backdrop-filter:blur(8px); transition:background 0.15s,transform 0.1s;
+  backdrop-filter:blur(8px);
+  transition:background 0.15s, transform 0.1s;
   -webkit-tap-highlight-color:transparent;
+  -webkit-appearance:none; appearance:none;
+  box-sizing:border-box; flex-shrink:0;
 }
-#fs-btn:hover, #fs-btn:active { background:rgba(180,130,0,0.45); transform:scale(0.92); }
-#fs-btn svg { width:55%; height:55%; }
-
-/* ── Controls panel — phải ── */
-#ctrl {
-  position:fixed; bottom:20px; right:12px;
-  display:flex; flex-direction:column; gap:7px; z-index:100;
-  align-items:flex-end;
-}
-.cbtn {
-  background:rgba(0,0,0,0.7); border:1px solid rgba(200,60,60,0.35);
-  color:#cc6666; font-size:clamp(10px,2.5vw,12px); padding:clamp(6px,2vw,9px) clamp(9px,3vw,13px);
-  border-radius:9px; cursor:pointer; backdrop-filter:blur(8px); text-align:center;
-  -webkit-tap-highlight-color:transparent; white-space:nowrap;
-  display:flex; align-items:center; justify-content:center;
-}
-.cbtn:active, .cbtn:hover { background:rgba(160,30,30,0.35); }
-/* Nút rotate chỉ icon, padding đều */
-#rotate-btn { padding:clamp(7px,2vw,10px); }
-#rotate-btn svg { display:block; }
+#fs-btn     { background:rgba(0,0,0,0.7); border:1px solid rgba(255,200,80,0.5); }
+#vr-btn     { background:rgba(0,0,0,0.7); border:1px solid rgba(100,160,255,0.5); }
+#rotate-btn { background:rgba(0,0,0,0.7); border:1px solid rgba(200,60,60,0.5); color:#cc6666; }
+#fs-btn:active     { background:rgba(180,130,0,0.45);  transform:scale(0.92); }
+#vr-btn:active     { background:rgba(60,100,200,0.45); transform:scale(0.92); }
+#rotate-btn:active { background:rgba(160,30,30,0.45);  transform:scale(0.92); }
+#fs-btn svg, #vr-btn svg, #rotate-btn svg { width:52%; height:52%; display:block; flex-shrink:0; }
+#ctrl { display:none !important; }
 
 /* ── Nút tương tác E — ẨN hoàn toàn, thay bằng nút ⊙ ── */
 #btn-interact { display:none !important; }
@@ -171,20 +169,7 @@ canvas { display:block; }
 #popup-title { color:#ff8888; font-size:clamp(13px,3.5vw,15px); font-weight:bold; margin-bottom:8px; }
 #popup-close-hint { margin-top:12px; color:#555; font-size:clamp(10px,2.5vw,11px); }
 
-/* ── VR Button ── */
-#vr-btn {
-  position:fixed; right:12px;
-  width:clamp(44px,12vw,54px); height:clamp(44px,12vw,54px);
-  background:rgba(0,0,0,0.7); border:1px solid rgba(100,160,255,0.45);
-  border-radius:50%; cursor:pointer; z-index:101;
-  display:flex; align-items:center; justify-content:center;
-  backdrop-filter:blur(8px); transition:background 0.15s, transform 0.1s;
-  -webkit-tap-highlight-color:transparent;
-  /* bottom được set bởi JS sau khi tính chiều cao #ctrl */
-  bottom: 100px;
-}
-#vr-btn:hover, #vr-btn:active { background:rgba(60,100,200,0.45); transform:scale(0.92); }
-#vr-btn svg { width:60%; height:60%; }
+/* #vr-btn style — managed by #right-btns container */
 
 /* ── QR Popup ── */
 #qr-overlay {
@@ -307,28 +292,21 @@ canvas { display:block; }
   </div>
   <div id="btn-jump"><svg viewBox="0 0 24 24"><path d="M12 5l-8 10h16z" fill="rgba(140,180,255,0.9)"/><rect x="10" y="15" width="4" height="5" rx="1" fill="rgba(140,180,255,0.9)"/></svg></div>
 </div>
-<div id="ctrl">
-  <div class="cbtn" id="rotate-btn" title="Xoay ngang màn hình"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:22px;height:22px">
+<div id="right-btns">
+  <div id="fs-btn" title="Toàn màn hình"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M3 3h6v2H5v4H3V3zm12 0h6v6h-2V5h-4V3zM3 15h2v4h4v2H3v-6zm16 4h-4v2h6v-6h-2v4z" fill="#ffd060"/>
+  </svg></div>
+  <div id="vr-btn" title="Xem trong VR / AR"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2 9C2 7.9 2.9 7 4 7H20C21.1 7 22 7.9 22 9V15C22 16.1 21.1 17 20 17H16L14 15H10L8 17H4C2.9 17 2 16.1 2 15V9Z" stroke="#88aaff" stroke-width="1.6" fill="none"/>
+    <circle cx="8.5" cy="12" r="2" stroke="#88aaff" stroke-width="1.4" fill="rgba(80,140,255,0.15)"/>
+    <circle cx="15.5" cy="12" r="2" stroke="#88aaff" stroke-width="1.4" fill="rgba(80,140,255,0.15)"/>
+  </svg></div>
+  <div id="rotate-btn" title="Xoay màn hình"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" >
   <rect x="3" y="7" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/>
   <circle cx="17.5" cy="12" r="1" fill="currentColor"/>
   <path d="M19 9.5c1 .7 1.7 1.5 1.7 2.5s-.7 1.8-1.7 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
   <path d="M20.5 7.5c1.8 1.1 3 2.7 3 4.5s-1.2 3.4-3 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
 </svg></div>
-</div>
-<!-- Nút Fullscreen -->
-<div id="fs-btn" title="Toàn màn hình">
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M3 3h6v2H5v4H3V3zm12 0h6v6h-2V5h-4V3zM3 15h2v4h4v2H3v-6zm16 4h-4v2h6v-6h-2v4z" fill="#ffd060"/>
-  </svg>
-</div>
-
-<!-- VR Button -->
-<div id="vr-btn" title="Xem trong VR / AR">
-  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M2 9C2 7.9 2.9 7 4 7H20C21.1 7 22 7.9 22 9V15C22 16.1 21.1 17 20 17H16L14 15H10L8 17H4C2.9 17 2 16.1 2 15V9Z" stroke="#88aaff" stroke-width="1.6" fill="none"/>
-    <circle cx="8.5" cy="12" r="2" stroke="#88aaff" stroke-width="1.4" fill="rgba(80,140,255,0.15)"/>
-    <circle cx="15.5" cy="12" r="2" stroke="#88aaff" stroke-width="1.4" fill="rgba(80,140,255,0.15)"/>
-  </svg>
 </div>
 
 <!-- QR Popup Overlay -->
@@ -572,11 +550,11 @@ function updateRotateBtn() {
   const btn = document.getElementById('rotate-btn');
   if (!btn) return;
   const isLandscape = window.innerWidth > window.innerHeight;
-  btn.innerHTML = isLandscape ? `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:22px;height:22px">
+  btn.innerHTML = isLandscape ? `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" >
   <rect x="7" y="3" width="10" height="14" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/>
   <circle cx="12" cy="17.5" r="1" fill="currentColor"/>
   <path d="M14.5 19c-.7 1-1.5 1.7-2.5 1.7s-1.8-.7-2.5-1.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
-</svg>` : `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:22px;height:22px">
+</svg>` : `<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" >
   <rect x="3" y="7" width="14" height="10" rx="2" stroke="currentColor" stroke-width="1.8" fill="none"/>
   <circle cx="17.5" cy="12" r="1" fill="currentColor"/>
   <path d="M19 9.5c1 .7 1.7 1.5 1.7 2.5s-.7 1.8-1.7 2.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/>
@@ -642,11 +620,7 @@ function updateLabelPositions() {
   const dpadH = document.getElementById('dpad-wrap').offsetHeight;
   document.getElementById('inspect-label').style.bottom   = (16 + dpadH + 10) + 'px';
   document.getElementById('interact-prompt').style.bottom = (16 + dpadH + 48) + 'px';
-  const ctrlH = document.getElementById('ctrl').offsetHeight;
-  const vrBottom = 16 + ctrlH + 10;
-  document.getElementById('vr-btn').style.bottom = vrBottom + 'px';
-  const vrH = document.getElementById('vr-btn').offsetHeight || 52;
-  document.getElementById('fs-btn').style.bottom = (vrBottom + vrH + 8) + 'px';
+  // right-btns tự căn qua CSS, không cần set bottom động nữa
 }
 updateLabelPositions();
 window.addEventListener('resize', updateLabelPositions);
