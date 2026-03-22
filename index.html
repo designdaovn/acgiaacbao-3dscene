@@ -339,23 +339,42 @@ loader.load('Crime_Scene.glb',
 
     const model = gltf.scene;
     model.traverse((node) => {
-      if (node.isLight) { node.visible = false; return; }
+      // Giảm đèn GLB (Sun intensity=683 → 1.2) thay vì tắt hẳn
+      if (node.isDirectionalLight || node.isPointLight || node.isSpotLight) {
+        node.intensity = Math.min(node.intensity, 1.2);
+        node.castShadow = true;
+        return;
+      }
+      if (node.isLight) return; // bỏ các light khác
+
       if (!node.isMesh) return;
-      node.castShadow = node.receiveShadow = true;
+      node.castShadow    = true;
+      node.receiveShadow = true;
+
       const fix = (mat) => {
-        if (!mat || !mat.map) return mat;
-        const b = new THREE.MeshBasicMaterial({
-          map: mat.map, side: THREE.DoubleSide,
+        if (!mat) return mat;
+        // MeshLambertMaterial: có lighting → tạo chiều sâu, bóng khối
+        // nhưng nhẹ hơn MeshStandardMaterial, không bị overexposed
+        const lam = new THREE.MeshLambertMaterial({
+          map:         mat.map  || null,
+          color:       mat.map  ? 0xffffff : (mat.color || new THREE.Color(0.75, 0.75, 0.75)),
+          side:        THREE.DoubleSide,
           transparent: mat.transparent || false,
-          alphaTest: mat.alphaTest || 0,
+          alphaTest:   mat.alphaTest   || 0,
         });
-        b.map.encoding = THREE.sRGBEncoding;
-        b.map.needsUpdate = true;
-        return b;
+        if (lam.map) {
+          lam.map.encoding    = THREE.sRGBEncoding;
+          lam.map.needsUpdate = true;
+        }
+        return lam;
       };
+
       if (Array.isArray(node.material)) node.material = node.material.map(fix);
       else { const m = fix(node.material); if (m) node.material = m; }
     });
+
+    // Ambient light fill — tránh bóng tối quá đen
+    scene.add(new THREE.AmbientLight(0xffffff, 0.55));
     scene.add(model);
 
     const box    = new THREE.Box3().setFromObject(model);
