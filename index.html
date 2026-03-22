@@ -53,63 +53,59 @@ canvas { display:block; }
 }
 
 /* ── D-pad — hình thập tự chuẩn ── */
-#dpad {
-  position:fixed; bottom:20px; left:16px;
-  display:grid;
-  /* 4 cột: [◀] [▼/▲/⊙] [▶] [↑jump] — cột 4 cách nhau 10px */
-  grid-template-columns: repeat(3, var(--btn-size)) 10px var(--btn-size);
-  grid-template-rows: repeat(3, var(--btn-size));
-  gap:4px; z-index:100;
-  --btn-size: clamp(48px, 13vw, 62px);
+/* ── D-pad wrapper: flex row gồm cross + jump ── */
+#dpad-wrap {
+  position:fixed; bottom:16px; left:12px;
+  display:flex; flex-direction:row; align-items:center;
+  gap:8px; z-index:100;
   user-select:none; -webkit-user-select:none;
-  -moz-user-select:none; -ms-user-select:none;
+  -webkit-touch-callout:none;
+}
+/* Cross grid 3x3 */
+#dpad {
+  display:grid;
+  grid-template-columns:repeat(3, var(--bs));
+  grid-template-rows:repeat(3, var(--bs));
+  gap:3px;
+  --bs: min(11vw, 52px);
 }
 .btn {
-  /* Kích thước do grid cha quyết định — không cần set width/height */
-  background:rgba(0,0,0,0.6); border:1px solid rgba(200,60,60,0.4);
-  border-radius:12px; color:rgba(255,160,160,0.9);
-  font-size:clamp(16px,4.5vw,22px);
-  cursor:pointer; display:flex; align-items:center; justify-content:center;
-  user-select:none;
-  -webkit-user-select:none;
-  -moz-user-select:none;
-  -ms-user-select:none;
-  -webkit-tap-highlight-color:transparent;
-  -webkit-touch-callout:none;
-  backdrop-filter:blur(6px); transition:background 0.1s,transform 0.08s;
-  touch-action:none;
-  /* Đảm bảo tỉ lệ vuông */
-  aspect-ratio:1/1;
-}
-.btn:active,.btn.on { background:rgba(200,50,50,0.5); transform:scale(0.91); }
-.btn.empty { visibility:hidden; pointer-events:none; }
-.btn-center {
-  background:rgba(255,255,255,0.06);
-  border-color:rgba(200,60,60,0.25);
-  color:rgba(255,160,160,0.5);
-  font-size:clamp(12px,3vw,16px);
-  pointer-events:auto; /* nút giữa = tương tác */
-  cursor:pointer;
-}
-.btn-center:active, .btn-center.on {
-  background:rgba(200,50,50,0.45) !important;
-  transform:scale(0.91);
-}
-/* Nút jump — nằm trong grid, cột 5, hàng 2 */
-#btn-jump {
-  grid-column: 5;
-  grid-row: 2;
-  background:rgba(0,0,0,0.6);
-  border:1px solid rgba(80,140,255,0.5);
-  border-radius:12px; color:rgba(160,200,255,0.95);
-  font-size:clamp(16px,4.5vw,22px);
+  width:var(--bs,44px); height:var(--bs,44px);
+  background:rgba(0,0,0,0.55); border:1px solid rgba(200,60,60,0.4);
+  border-radius:10px; color:rgba(255,160,160,0.9);
+  font-size:calc(var(--bs,44px) * 0.38);
   cursor:pointer; display:flex; align-items:center; justify-content:center;
   user-select:none; -webkit-user-select:none;
   -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none;
   backdrop-filter:blur(6px); transition:background 0.1s,transform 0.08s;
-  touch-action:none; aspect-ratio:1/1;
+  touch-action:none;
 }
-#btn-jump:active, #btn-jump.on { background:rgba(50,80,200,0.5); transform:scale(0.91); }
+.btn:active,.btn.on { background:rgba(200,50,50,0.5); transform:scale(0.93); }
+.btn.empty { visibility:hidden; pointer-events:none; }
+.btn-center {
+  background:rgba(255,255,255,0.05);
+  border-color:rgba(200,60,60,0.2);
+  color:rgba(255,160,160,0.4);
+  font-size:calc(var(--bs,44px) * 0.28);
+  pointer-events:auto; cursor:pointer;
+}
+.btn-center:active,.btn-center.on {
+  background:rgba(200,50,50,0.45) !important; transform:scale(0.93);
+}
+/* Nút jump đứng độc lập bên phải cross */
+#btn-jump {
+  width:var(--bs,44px); height:var(--bs,44px);
+  background:rgba(0,0,0,0.55);
+  border:1px solid rgba(80,140,255,0.5);
+  border-radius:10px; color:rgba(160,200,255,0.95);
+  font-size:calc(var(--bs,44px) * 0.38);
+  cursor:pointer; display:flex; align-items:center; justify-content:center;
+  user-select:none; -webkit-user-select:none;
+  -webkit-tap-highlight-color:transparent; -webkit-touch-callout:none;
+  backdrop-filter:blur(6px); transition:background 0.1s,transform 0.08s;
+  touch-action:none; flex-shrink:0;
+}
+#btn-jump:active,#btn-jump.on { background:rgba(50,80,200,0.5); transform:scale(0.93); }
 /* Nút fullscreen */
 #fs-btn {
   position:fixed; right:12px; z-index:101;
@@ -266,7 +262,7 @@ canvas { display:block; }
    Desktop / màn hình lớn
 ════════════════════════════════════════ */
 @media (min-width:768px) {
-  #dpad { --btn-size:54px; }
+  #dpad { --bs: 50px; }
   .cbtn { font-size:11px; }
 }
 </style>
@@ -294,20 +290,18 @@ canvas { display:block; }
   <div id="popup-body"></div>
   <div id="popup-close-hint">Nhấn E hoặc Esc để đóng</div>
 </div>
-<div id="dpad">
-  <!-- Hàng 1: [empty][▲][empty][gap][empty] -->
-  <div class="btn empty"></div>
-  <div class="btn" id="btn-w">▲</div>
-  <div class="btn empty"></div>
-  <!-- Hàng 2: [◀][⊙][▶][gap][↑] — jump ở cột 5 qua CSS -->
-  <div class="btn" id="btn-a">◀</div>
-  <div class="btn btn-center" id="btn-center">⊙</div>
-  <div class="btn" id="btn-d">▶</div>
-  <!-- Hàng 3: [empty][▼][empty][gap][empty] -->
-  <div class="btn empty"></div>
-  <div class="btn" id="btn-s">▼</div>
-  <div class="btn empty"></div>
-  <!-- Jump: CSS đặt tại grid-column:5, grid-row:2 -->
+<div id="dpad-wrap">
+  <div id="dpad">
+    <div class="btn empty"></div>
+    <div class="btn" id="btn-w">▲</div>
+    <div class="btn empty"></div>
+    <div class="btn" id="btn-a">◀</div>
+    <div class="btn btn-center" id="btn-center">⊙</div>
+    <div class="btn" id="btn-d">▶</div>
+    <div class="btn empty"></div>
+    <div class="btn" id="btn-s">▼</div>
+    <div class="btn empty"></div>
+  </div>
   <div id="btn-jump">↑</div>
 </div>
 <div id="ctrl">
@@ -476,7 +470,7 @@ let lmb = false, mx = 0, my = 0;
 
 document.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
-  if (e.target.closest('#dpad,#ctrl,#badge,#hint')) return;
+  if (e.target.closest('#dpad-wrap,#ctrl,#badge,#hint')) return;
   lmb = true; mx = e.clientX; my = e.clientY;
   document.body.style.cursor = 'grabbing';
 });
@@ -507,7 +501,7 @@ document.addEventListener('pointerlockchange', () => {
 // ── Touch look ────────────────────────────────────────────────────
 let tid = null, tlx = 0, tly = 0;
 renderer.domElement.addEventListener('touchstart', (e) => {
-  if (e.target.closest('#dpad,#ctrl')) return;
+  if (e.target.closest('#dpad-wrap,#ctrl')) return;
   if (tid !== null) return;
   tid = e.changedTouches[0].identifier;
   tlx = e.changedTouches[0].clientX;
@@ -628,13 +622,13 @@ function openPopup(name) {
 
 // ── Vị trí label tránh bị d-pad che ──────────────────────────────
 function updateLabelPositions() {
-  const dpadH = document.getElementById('dpad').offsetHeight;
-  document.getElementById('inspect-label').style.bottom   = (20 + dpadH + 12) + 'px';
-  document.getElementById('interact-prompt').style.bottom = (20 + dpadH + 50) + 'px';
+  const dpadH = document.getElementById('dpad-wrap').offsetHeight;
+  document.getElementById('inspect-label').style.bottom   = (16 + dpadH + 10) + 'px';
+  document.getElementById('interact-prompt').style.bottom = (16 + dpadH + 48) + 'px';
   const ctrlH = document.getElementById('ctrl').offsetHeight;
-  const vrBottom = 20 + ctrlH + 10;
+  const vrBottom = 16 + ctrlH + 10;
   document.getElementById('vr-btn').style.bottom = vrBottom + 'px';
-  const vrH = document.getElementById('vr-btn').offsetHeight || 54;
+  const vrH = document.getElementById('vr-btn').offsetHeight || 52;
   document.getElementById('fs-btn').style.bottom = (vrBottom + vrH + 8) + 'px';
 }
 updateLabelPositions();
@@ -665,7 +659,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 // Context menu trên d-pad
-document.getElementById('dpad').addEventListener('contextmenu', e => e.preventDefault());
+document.getElementById('dpad-wrap').addEventListener('contextmenu', e => e.preventDefault());
 
 // ── Game Loop ─────────────────────────────────────────────────────
 const clock = new THREE.Clock();
@@ -725,7 +719,7 @@ function animate() {
     if (hits.length > 0 && hits[0].distance < 4.0) {
       const name = hits[0].object.name || hits[0].object.parent?.name || '';
       currentHit = name;
-      nameEl.textContent      = '🔍 ' + name;
+      nameEl.textContent      = name;
       inspectEl.style.display = 'block';
       promptEl.style.display  = INTERACTIONS[name] ? 'block' : 'none';
     } else {
@@ -749,19 +743,26 @@ window.addEventListener('resize', () => {
 const fsBtn = document.getElementById('fs-btn');
 
 function toggleFullscreen() {
-  if (!document.fullscreenElement && !document.webkitFullscreenElement) {
-    // Vào fullscreen
+  const isFull = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  if (!isFull) {
     const el = document.documentElement;
-    if (el.requestFullscreen)       el.requestFullscreen();
-    else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
-    // Thử lock landscape luôn khi vào fullscreen
-    if (screen.orientation && screen.orientation.lock) {
-      screen.orientation.lock('landscape').catch(()=>{});
+    const req = el.requestFullscreen || el.webkitRequestFullscreen
+              || el.mozRequestFullScreen || el.msRequestFullscreen;
+    if (req) {
+      req.call(el).then(() => {
+        if (screen.orientation && screen.orientation.lock)
+          screen.orientation.lock('landscape').catch(()=>{});
+      }).catch(()=>{});
+    } else {
+      // iOS Safari không có Fullscreen API → ẩn browser UI bằng scroll trick
+      window.scrollTo(0, 1);
+      // Hướng dẫn thêm Home Screen
+      alert('Trên iOS: nhấn Share → "Thêm vào màn hình chính" để chơi fullscreen!');
     }
   } else {
-    // Thoát fullscreen
-    if (document.exitFullscreen)       document.exitFullscreen();
-    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+    const exit = document.exitFullscreen || document.webkitExitFullscreen
+               || document.mozCancelFullScreen || document.msExitFullscreen;
+    if (exit) exit.call(document);
   }
 }
 fsBtn.addEventListener('click',      toggleFullscreen);
