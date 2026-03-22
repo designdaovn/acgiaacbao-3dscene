@@ -93,11 +93,16 @@ canvas { display:block; }
 .btn:active,.btn.on { background:rgba(200,50,50,0.5); transform:scale(0.91); }
 .btn.empty { visibility:hidden; pointer-events:none; }
 .btn-center {
-  background:rgba(255,255,255,0.06) !important;
-  border-color:rgba(200,60,60,0.2) !important;
-  color:rgba(255,160,160,0.35) !important;
-  font-size:clamp(12px,3vw,16px) !important;
-  pointer-events:none; /* nút giữa không có chức năng */
+  background:rgba(255,255,255,0.06);
+  border-color:rgba(200,60,60,0.25);
+  color:rgba(255,160,160,0.5);
+  font-size:clamp(12px,3vw,16px);
+  pointer-events:auto; /* nút giữa = tương tác */
+  cursor:pointer;
+}
+.btn-center:active, .btn-center.on {
+  background:rgba(200,50,50,0.45) !important;
+  transform:scale(0.91);
 }
 /* Nút jump độc lập */
 #btn-jump {
@@ -128,16 +133,8 @@ canvas { display:block; }
 }
 .cbtn:active, .cbtn:hover { background:rgba(160,30,30,0.35); }
 
-/* ── Nút tương tác E (chỉ hiện trên mobile) ── */
-#btn-interact {
-  display:none;
-  background:rgba(200,50,50,0.85); border:1px solid rgba(255,100,100,0.5);
-  color:#fff; font-size:clamp(11px,3vw,14px); font-weight:bold;
-  padding:clamp(8px,2.5vw,11px) clamp(12px,4vw,18px);
-  border-radius:10px; cursor:pointer; backdrop-filter:blur(8px);
-  -webkit-tap-highlight-color:transparent; letter-spacing:0.05em;
-}
-#btn-interact:active { transform:scale(0.93); }
+/* ── Nút tương tác E — ẨN hoàn toàn, thay bằng nút ⊙ ── */
+#btn-interact { display:none !important; }
 
 /* ── Inspect label ── */
 #inspect-label {
@@ -250,7 +247,6 @@ canvas { display:block; }
   /* Ẩn hint trên màn hình nhỏ */
   #hint { display:none !important; }
   /* Hiện nút E */
-  #btn-interact { display:block !important; }
   /* Popup chiếm rộng hơn */
   #interact-popup { width:92vw; }
 }
@@ -260,7 +256,6 @@ canvas { display:block; }
 ════════════════════════════════════════ */
 @media (min-width:481px) and (max-width:767px) {
   #hint { font-size:10px; max-width:calc(100vw - 200px); }
-  #btn-interact { display:block !important; }
 }
 
 /* ════════════════════════════════════════
@@ -314,8 +309,7 @@ canvas { display:block; }
   <div id="btn-jump">↑</div>
 </div>
 <div id="ctrl">
-  <div class="cbtn" id="speed-btn">🚶 NORMAL</div>
-  <div class="cbtn" id="btn-interact">⚡ TƯƠNG TÁC</div>
+  <div class="cbtn" id="rotate-btn" title="Xoay ngang màn hình">⟳ XOAY NGANG</div>
 </div>
 
 <!-- VR Button -->
@@ -536,13 +530,42 @@ document.addEventListener('keydown', (e) => {
 });
 document.addEventListener('keyup', (e) => { K[e.code] = false; });
 
-const SPEEDS  = [4.0, 8.5, 1.5];
-const SLABELS = ['🚶 NORMAL','🏃 FAST','🐢 SLOW'];
-let sMode = 0;
-document.getElementById('speed-btn').addEventListener('click', () => {
-  sMode = (sMode + 1) % 3;
-  document.getElementById('speed-btn').textContent = SLABELS[sMode];
+// Nút xoay ngang màn hình (chỉ hoạt động trên mobile)
+document.getElementById('rotate-btn').addEventListener('click', () => {
+  if (screen.orientation && screen.orientation.lock) {
+    // API mới — hỗ trợ Android Chrome
+    screen.orientation.lock('landscape').catch(() => {
+      // Fallback: dùng webkit
+      tryLockLandscape();
+    });
+  } else {
+    tryLockLandscape();
+  }
 });
+
+function tryLockLandscape() {
+  // Fallback cho iOS và các trình duyệt cũ
+  if (window.screen.lockOrientation) {
+    window.screen.lockOrientation('landscape');
+  } else if (window.screen.mozLockOrientation) {
+    window.screen.mozLockOrientation('landscape');
+  } else if (window.screen.msLockOrientation) {
+    window.screen.msLockOrientation('landscape');
+  } else {
+    // Không hỗ trợ lock → hướng dẫn user xoay tay
+    alert('Vui lòng xoay điện thoại sang ngang và tắt khóa xoay màn hình!');
+  }
+}
+
+// Tự động ẩn/hiện nút xoay tùy theo orientation
+function updateRotateBtn() {
+  const btn = document.getElementById('rotate-btn');
+  if (!btn) return;
+  const isLandscape = window.innerWidth > window.innerHeight;
+  btn.textContent = isLandscape ? '↕ XOAY DỌC' : '⟳ XOAY NGANG';
+}
+window.addEventListener('resize', updateRotateBtn);
+updateRotateBtn();
 
 // ── D-pad ─────────────────────────────────────────────────────────
 [['btn-w','KeyW'],['btn-s','KeyS'],['btn-a','KeyA'],['btn-d','KeyD']].forEach(([id,code]) => {
@@ -632,14 +655,15 @@ function updateLabelPositions() {
 updateLabelPositions();
 window.addEventListener('resize', updateLabelPositions);
 
-// ── Nút tương tác mobile ──────────────────────────────────────────────
-document.getElementById('btn-interact').addEventListener('click', () => {
+// ── Nút ⊙ giữa d-pad = tương tác (thay cho btn-interact) ────────────
+const centerBtn = document.getElementById('btn-center');
+const doInteract = (e) => {
+  if (e) e.preventDefault();
   if (popupOpen) { closePopup(); return; }
   if (currentHit && INTERACTIONS[currentHit]) openPopup(currentHit);
-});
-document.getElementById('btn-interact').addEventListener('touchstart', (e) => {
-  e.stopPropagation();
-}, { passive: true });
+};
+centerBtn.addEventListener('click',      doInteract);
+centerBtn.addEventListener('touchstart', doInteract, { passive: false });
 
 // ── Tap vào popup để đóng (mobile) ───────────────────────────────────
 document.getElementById('interact-popup').addEventListener('click', closePopup);
